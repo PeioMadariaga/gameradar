@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from tensorflow import keras as K
 
 ARTIFACTS = os.environ.get("ARTIFACTS_DIR","artifacts")
-MODEL = K.models.load_model(os.path.join(ARTIFACTS, "model_keras"))
+MODEL = K.models.load_model(os.path.join(ARTIFACTS, "model.keras"))
 META = json.load(open(os.path.join(ARTIFACTS,"meta.json"), "r"))
 GENRES = META["GENRES"]; PLATFORMS = META["PLATFORMS"]; COUNTRIES = META["COUNTRIES"]
 
