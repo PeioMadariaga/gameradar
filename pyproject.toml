@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gameradar"
+version = "0.1.0"
+description = "GameRadar: FastAPI demo with a tiny Keras model and synthetic data"
+authors = [{name = "Equipo Python", email = "demo@example.com"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.6",
+  "numpy>=1.26",
+  "matplotlib>=3.9",
+  "tensorflow-cpu>=2.16"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
