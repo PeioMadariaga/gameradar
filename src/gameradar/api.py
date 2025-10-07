@@ -292,6 +292,23 @@ img{max-width:100%}
 const API = location.origin;
 const GENRES = ["RPG","Adventure","Action","Shooter","Sports"];
 const PLATFORMS = ["PC","PS5","Xbox","Switch"];
+
+// --- helpers ---
+function n(v){ // parsea número aceptando coma o punto
+  if (typeof v === "number") return v;
+  return parseFloat(String(v).replace(",", "."));
+}
+function showError(status, payload){
+  alert("Error " + status + ":\n" + (typeof payload === "string" ? payload : JSON.stringify(payload)));
+}
+function headersWithKey(){
+  const h = {"Content-Type":"application/json"};
+  const key = document.getElementById('apikey').value.trim();
+  if (key) h["X-API-Key"] = key;
+  return h;
+}
+
+// montar checkboxes
 function mountChoices(){
   const g = document.getElementById('genres'); g.innerHTML = "<label>Géneros</label><br/>";
   GENRES.forEach(v=> g.innerHTML += '<label class="pill"><input type="checkbox" name="genre" value="'+v+'">'+v+'</label> ');
@@ -299,37 +316,53 @@ function mountChoices(){
   PLATFORMS.forEach(v=> p.innerHTML += '<label class="pill"><input type="checkbox" name="plat" value="'+v+'">'+v+'</label> ');
 }
 mountChoices();
+
 async function predict(){
   const genres = [...document.querySelectorAll('input[name="genre"]:checked')].map(x=>x.value);
   const plats  = [...document.querySelectorAll('input[name="plat"]:checked')].map(x=>x.value);
   const body = {
     genres, platforms: plats,
-    price_eur: parseFloat(document.getElementById('price').value),
-    marketing_budget_k: parseFloat(document.getElementById('mk').value),
+    price_eur: n(document.getElementById('price').value),
+    marketing_budget_k: n(document.getElementById('mk').value),
     is_sequel: document.getElementById('seq').checked,
     has_crossplay: document.getElementById('cross').checked,
     coop: document.getElementById('coop').checked
   };
-  const headers = {"Content-Type":"application/json"};
-  const key = document.getElementById('apikey').value.trim();
-  if(key) headers["X-API-Key"] = key;
-  const r = await fetch(API + "/predict", {method:"POST", headers, body: JSON.stringify(body)});
+
+  const r = await fetch(API + "/predict", {method:"POST", headers: headersWithKey(), body: JSON.stringify(body)});
+  if(!r.ok){
+    let payload; try { payload = await r.json(); } catch { payload = await r.text(); }
+    return showError(r.status, payload);
+  }
   const data = await r.json();
+  if (typeof data.success_worldwide !== "number"){
+    return showError("?", data);
+  }
+
   document.getElementById('world').textContent = (data.success_worldwide*100).toFixed(1) + "%";
+  // imagen
   const img = document.getElementById('img');
-  img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display = "block";
-  const tb = document.querySelector('#table tbody'); tb.innerHTML = "";
-  Object.entries(data.success_by_country).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([c,v])=>{
-    const tr = document.createElement('tr'); tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`; tb.appendChild(tr);
-  });
+  img.src = "data:image/png;base64," + data.heatmap_base64;
+  img.style.display = "block";
+  // tabla top países
+  const tb = document.querySelector('#table tbody');
+  tb.innerHTML = "";
+  Object.entries(data.success_by_country)
+    .sort((a,b)=>b[1]-a[1]).slice(0,5)
+    .forEach(([c,v])=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`;
+      tb.appendChild(tr);
+    });
 }
+
 async function whatif(){
   const genres = [...document.querySelectorAll('input[name="genre"]:checked')].map(x=>x.value);
   const plats  = [...document.querySelectorAll('input[name="plat"]:checked')].map(x=>x.value);
   const base_payload = {
     genres, platforms: plats,
-    price_eur: parseFloat(document.getElementById('price').value),
-    marketing_budget_k: parseFloat(document.getElementById('mk').value),
+    price_eur: n(document.getElementById('price').value),
+    marketing_budget_k: n(document.getElementById('mk').value),
     is_sequel: document.getElementById('seq').checked,
     has_crossplay: document.getElementById('cross').checked,
     coop: document.getElementById('coop').checked
@@ -339,19 +372,26 @@ async function whatif(){
     {"platforms": Array.from(new Set([...plats, "PS5","Xbox"]))},
     {"marketing_budget_k": base_payload.marketing_budget_k + 80}
   ];
-  const headers = {"Content-Type":"application/json"};
-  const key = document.getElementById('apikey').value.trim();
-  if(key) headers["X-API-Key"] = key;
-  const r = await fetch(API + "/whatif", {method:"POST", headers, body: JSON.stringify({base_payload, variants})});
+
+  const r = await fetch(API + "/whatif", {method:"POST", headers: headersWithKey(), body: JSON.stringify({base_payload, variants})});
+  if(!r.ok){
+    let payload; try { payload = await r.json(); } catch { payload = await r.text(); }
+    return showError(r.status, payload);
+  }
   const data = await r.json();
   const tb = document.querySelector('#what tbody'); tb.innerHTML = "";
   data.variants.forEach(v=>{
+    const sign = v.delta >= 0 ? "▲" : "▼";
+    const color = v.delta >= 0 ? "style='color:#5ce1e6;font-weight:700'" : "style='color:#f87171;font-weight:700'";
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${v.change}</td><td>${(v.success_worldwide*100).toFixed(1)}%</td><td>${(v.delta*100).toFixed(1)} pp</td>`;
+    tr.innerHTML = `<td>${v.change}</td>
+      <td>${(v.success_worldwide*100).toFixed(1)}%</td>
+      <td ${color}>${sign} ${(v.delta*100).toFixed(1)} pp</td>`;
     tb.appendChild(tr);
   });
 }
-</script></body></html>
+</script>
+</body></html>
     """
 
 # -----------------------------
