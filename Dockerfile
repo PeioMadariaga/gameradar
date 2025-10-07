@@ -3,14 +3,17 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
-# Copiamos primero el pyproject para cachear deps
-COPY pyproject.toml /app/
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -e .
+# Copia metadatos + README (evita avisos)
+COPY pyproject.toml README.md /app/
 
-# Ahora el código
+# Copia el código ANTES del editable install
 COPY src /app/src
 
-# Entrena un mini-modelo al construir
+# Instala deps y el paquete en editable
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
+
+# Entrena el modelo durante la build
 RUN python -m gameradar.train
 
 ENV ARTIFACTS_DIR=/app/artifacts
