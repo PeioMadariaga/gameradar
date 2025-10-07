@@ -213,7 +213,7 @@ def predict(payload: PredictIn):
         success_worldwide=world,
         success_by_country=by_country,
         avg_playtime_by_country=play,
-        heatmap_base64=heat_b64
+        heatmap_base64=heat_b64,
         units_by_country=units_by_country,
         revenue_global_eur=revenue_global_eur
     )
