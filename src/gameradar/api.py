@@ -178,7 +178,7 @@ AFF = {
 def root():
     return {"status": "ok", "docs": "/docs", "demo": "/demo"}
 
-@app.post("/predict", response_model=PredictOut, tags=["predict"], dependencies=[Depends(check_api_key)])
+@app.post("/predict", response_model=PredictOut, tags=["predict"])
 def predict(payload: PredictIn):
     _ensure_loaded()
     X = vectorize_one(payload.model_dump())
@@ -210,7 +210,7 @@ def predict(payload: PredictIn):
         heatmap_base64=heat_b64
     )
 
-@app.post("/whatif", response_model=WhatIfOut, tags=["whatif"], dependencies=[Depends(check_api_key)])
+@app.post("/whatif", response_model=WhatIfOut, tags=["whatif"])
 def whatif(req: WhatIfIn):
     _ensure_loaded()
     Xbase = vectorize_one(req.base_payload.model_dump())
