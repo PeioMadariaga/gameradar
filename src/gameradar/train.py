@@ -64,7 +64,7 @@ def main():
 
     artifacts = os.environ.get("ARTIFACTS_DIR","artifacts")
     os.makedirs(artifacts, exist_ok=True)
-    m.save(os.path.join(artifacts, "model_keras"))
+    m.save(os.path.join(artifacts, "model.keras"))
     with open(os.path.join(artifacts, "meta.json"), "w") as f:
         json.dump({"GENRES":GENRES, "PLATFORMS":PLATFORMS, "COUNTRIES":COUNTRIES}, f)
     print("Artifacts saved in", artifacts)
