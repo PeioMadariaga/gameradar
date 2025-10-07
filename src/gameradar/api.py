@@ -229,7 +229,7 @@ def demo():
     return """
 <!doctype html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GameRadar Demo</title>
+<title>GameRadar — Demo</title>
 <style>
 :root{--bg:#0b1220;--card:#121a2a;--accent:#5ce1e6;--txt:#e8eefc}
 body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(120deg,#0b1220,#0e1430);color:var(--txt)}
@@ -252,14 +252,31 @@ img{max-width:100%}
 <div class="wrap">
   <h1>🎮 GameRadar — Demo</h1>
   <p class="muted">Predice el éxito de un videojuego y muestra un gráfico listo para incrustar en cualquier web.</p>
+
   <div class="grid">
     <div class="card">
       <h2>1) Parámetros</h2>
-      <div class="row" id="genres"></div>
-      <div class="row" id="plats"></div>
+
+      <div class="row"><div>
+        <label>Géneros</label><br/>
+        <label class="pill"><input type="checkbox" name="genre" value="RPG">RPG</label>
+        <label class="pill"><input type="checkbox" name="genre" value="Adventure">Adventure</label>
+        <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
+        <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
+        <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
+      </div></div>
+
+      <div class="row"><div>
+        <label>Plataformas</label><br/>
+        <label class="pill"><input type="checkbox" name="plat" value="PC">PC</label>
+        <label class="pill"><input type="checkbox" name="plat" value="PS5">PS5</label>
+        <label class="pill"><input type="checkbox" name="plat" value="Xbox">Xbox</label>
+        <label class="pill"><input type="checkbox" name="plat" value="Switch">Switch</label>
+      </div></div>
+
       <div class="row">
-        <div><label>Precio (€)</label><br/><input id="price" type="number" step="0.01" value="39.99"></div>
-        <div><label>Marketing (K€)</label><br/><input id="mk" type="number" step="1" value="120"></div>
+        <div><label>Precio (€)</label><br/><input id="price" type="text" value="39,99"></div>
+        <div><label>Marketing (K€)</label><br/><input id="mk" type="text" value="120"></div>
       </div>
       <div class="row">
         <label class="pill"><input id="seq" type="checkbox">Secuela</label>
@@ -270,10 +287,11 @@ img{max-width:100%}
         <div><label>API Key (opcional)</label><br/><input id="apikey" placeholder="X-API-Key si la definiste"></div>
       </div>
       <div class="row">
-        <button class="primary" onclick="predict()">⚡ Predecir</button>
-        <button onclick="whatif()">🧪 What-if</button>
+        <button class="primary" onclick="pred()">⚡ Predecir</button>
+        <button onclick="wif()">🧪 What-if</button>
       </div>
     </div>
+
     <div class="card">
       <h2>2) Resultados</h2>
       <div class="big" id="world">—</div>
@@ -283,84 +301,44 @@ img{max-width:100%}
       <table id="table"><thead><tr><th>País</th><th>Prob.</th></tr></thead><tbody></tbody></table>
     </div>
   </div>
+
   <div class="card" style="margin-top:16px">
     <h2>3) What-if</h2>
     <table id="what"><thead><tr><th>Cambio</th><th>Nuevo %</th><th>Δ respecto base</th></tr></thead><tbody></tbody></table>
   </div>
 </div>
+
 <script>
 const API = location.origin;
-const GENRES = ["RPG","Adventure","Action","Shooter","Sports"];
-const PLATFORMS = ["PC","PS5","Xbox","Switch"];
+function n(v){ return parseFloat(String(v).replace(",", ".")); }
+function headers(){ const h={"Content-Type":"application/json"}; const k=document.getElementById('apikey').value.trim(); if(k) h["X-API-Key"]=k; return h; }
+function checked(name){ return [...document.querySelectorAll('input[name="'+name+'"]:checked')].map(x=>x.value); }
 
-// --- helpers ---
-function n(v){ // parsea número aceptando coma o punto
-  if (typeof v === "number") return v;
-  return parseFloat(String(v).replace(",", "."));
-}
-function showError(status, payload){
-  alert("Error " + status + ":\n" + (typeof payload === "string" ? payload : JSON.stringify(payload)));
-}
-function headersWithKey(){
-  const h = {"Content-Type":"application/json"};
-  const key = document.getElementById('apikey').value.trim();
-  if (key) h["X-API-Key"] = key;
-  return h;
-}
-
-// montar checkboxes
-function mountChoices(){
-  const g = document.getElementById('genres'); g.innerHTML = "<label>Géneros</label><br/>";
-  GENRES.forEach(v=> g.innerHTML += '<label class="pill"><input type="checkbox" name="genre" value="'+v+'">'+v+'</label> ');
-  const p = document.getElementById('plats'); p.innerHTML = "<label>Plataformas</label><br/>";
-  PLATFORMS.forEach(v=> p.innerHTML += '<label class="pill"><input type="checkbox" name="plat" value="'+v+'">'+v+'</label> ');
-}
-mountChoices();
-
-async function predict(){
-  const genres = [...document.querySelectorAll('input[name="genre"]:checked')].map(x=>x.value);
-  const plats  = [...document.querySelectorAll('input[name="plat"]:checked')].map(x=>x.value);
+async function pred(){
   const body = {
-    genres, platforms: plats,
+    genres: checked("genre"),
+    platforms: checked("plat"),
     price_eur: n(document.getElementById('price').value),
     marketing_budget_k: n(document.getElementById('mk').value),
     is_sequel: document.getElementById('seq').checked,
     has_crossplay: document.getElementById('cross').checked,
     coop: document.getElementById('coop').checked
   };
-
-  const r = await fetch(API + "/predict", {method:"POST", headers: headersWithKey(), body: JSON.stringify(body)});
-  if(!r.ok){
-    let payload; try { payload = await r.json(); } catch { payload = await r.text(); }
-    return showError(r.status, payload);
-  }
+  const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
+  if(!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} alert("Error "+r.status+"\\n"+(typeof p==="string"?p:JSON.stringify(p))); return; }
   const data = await r.json();
-  if (typeof data.success_worldwide !== "number"){
-    return showError("?", data);
-  }
-
   document.getElementById('world').textContent = (data.success_worldwide*100).toFixed(1) + "%";
-  // imagen
-  const img = document.getElementById('img');
-  img.src = "data:image/png;base64," + data.heatmap_base64;
-  img.style.display = "block";
-  // tabla top países
-  const tb = document.querySelector('#table tbody');
-  tb.innerHTML = "";
-  Object.entries(data.success_by_country)
-    .sort((a,b)=>b[1]-a[1]).slice(0,5)
-    .forEach(([c,v])=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`;
-      tb.appendChild(tr);
-    });
+  const img = document.getElementById('img'); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
+  const tb = document.querySelector('#table tbody'); tb.innerHTML="";
+  Object.entries(data.success_by_country).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([c,v])=>{
+    const tr = document.createElement('tr'); tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`; tb.appendChild(tr);
+  });
 }
 
-async function whatif(){
-  const genres = [...document.querySelectorAll('input[name="genre"]:checked')].map(x=>x.value);
-  const plats  = [...document.querySelectorAll('input[name="plat"]:checked')].map(x=>x.value);
+async function wif(){
   const base_payload = {
-    genres, platforms: plats,
+    genres: checked("genre"),
+    platforms: checked("plat"),
     price_eur: n(document.getElementById('price').value),
     marketing_budget_k: n(document.getElementById('mk').value),
     is_sequel: document.getElementById('seq').checked,
@@ -369,24 +347,18 @@ async function whatif(){
   };
   const variants = [
     {"price_eur": base_payload.price_eur - 10},
-    {"platforms": Array.from(new Set([...plats, "PS5","Xbox"]))},
+    {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
     {"marketing_budget_k": base_payload.marketing_budget_k + 80}
   ];
-
-  const r = await fetch(API + "/whatif", {method:"POST", headers: headersWithKey(), body: JSON.stringify({base_payload, variants})});
-  if(!r.ok){
-    let payload; try { payload = await r.json(); } catch { payload = await r.text(); }
-    return showError(r.status, payload);
-  }
+  const r = await fetch(API + "/whatif", {method:"POST", headers: headers(), body: JSON.stringify({base_payload, variants})});
+  if(!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} alert("Error "+r.status+"\\n"+(typeof p==="string"?p:JSON.stringify(p))); return; }
   const data = await r.json();
-  const tb = document.querySelector('#what tbody'); tb.innerHTML = "";
+  const tb = document.querySelector('#what tbody'); tb.innerHTML="";
   data.variants.forEach(v=>{
     const sign = v.delta >= 0 ? "▲" : "▼";
     const color = v.delta >= 0 ? "style='color:#5ce1e6;font-weight:700'" : "style='color:#f87171;font-weight:700'";
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${v.change}</td>
-      <td>${(v.success_worldwide*100).toFixed(1)}%</td>
-      <td ${color}>${sign} ${(v.delta*100).toFixed(1)} pp</td>`;
+    tr.innerHTML = `<td>${v.change}</td><td>${(v.success_worldwide*100).toFixed(1)}%</td><td ${color}>${sign} ${(v.delta*100).toFixed(1)} pp</td>`;
     tb.appendChild(tr);
   });
 }
