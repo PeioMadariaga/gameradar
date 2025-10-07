@@ -114,6 +114,8 @@ class PredictOut(BaseModel):
     success_by_country: Dict[str,float]
     avg_playtime_by_country: Dict[str,float]
     heatmap_base64: str
+    units_by_country: Dict[str, int]
+    revenue_global_eur: float
 
 class WhatIfIn(BaseModel):
     base_payload: PredictIn
@@ -201,6 +203,10 @@ def predict(payload: PredictIn):
         - 0.04*(payload.price_eur - 39.0)
     for c in COUNTRIES:
         play[c] = float(np.clip(base_play, 3.0, 60.0))
+    # --- NUEVO: unidades y revenue ---
+    base_units = 80000  # unidades “base” por país cuando p=1.0 (ajustable para demo)
+    units_by_country = {c: int(base_units * p) for c, p in by_country.items()}
+    revenue_global_eur = float(sum(units_by_country.values()) * payload.price_eur)
 
     heat_b64 = bars_png(by_country)
     return PredictOut(
@@ -208,6 +214,8 @@ def predict(payload: PredictIn):
         success_by_country=by_country,
         avg_playtime_by_country=play,
         heatmap_base64=heat_b64
+        units_by_country=units_by_country,
+        revenue_global_eur=revenue_global_eur
     )
 
 @app.post("/whatif", response_model=WhatIfOut, tags=["whatif"])
@@ -223,6 +231,32 @@ def whatif(req: WhatIfIn):
         w = float(MODEL.predict(Xv, verbose=0)[0,0])
         items.append(WhatIfOutItem(change=str(v), success_worldwide=w, delta=w-base_world))
     return WhatIfOut(base=base_world, variants=items)
+class PriceCurveIn(BaseModel):
+    payload: PredictIn
+    min_price: float = 19.0
+    max_price: float = 69.0
+    steps: int = 21
+
+class PriceCurveOut(BaseModel):
+    points: list[tuple[float, float]]   # [(precio, prob)]
+    best_price: float
+    best_prob: float
+
+@app.post("/curve/price", response_model=PriceCurveOut, tags=["predict"])
+def curve_price(req: PriceCurveIn):
+    _ensure_loaded()
+    ps = np.linspace(req.min_price, req.max_price, req.steps)
+    pts: list[tuple[float,float]] = []
+    best_p, best_prob = None, -1.0
+    base = req.payload.model_dump()
+    for p in ps:
+        base["price_eur"] = float(p)
+        X = vectorize_one(base)
+        prob = float(MODEL.predict(X, verbose=0)[0,0])
+        pts.append((float(p), prob))
+        if prob > best_prob:
+            best_prob, best_p = prob, float(p)
+    return PriceCurveOut(points=pts, best_price=best_p, best_prob=best_prob)
 
 @app.get("/demo", response_class=HTMLResponse, tags=["demo"])
 def demo():
@@ -296,6 +330,9 @@ img{max-width:100%}
       <h2>2) Resultados</h2>
       <div class="big" id="world">—</div>
       <p class="muted">Probabilidad de éxito mundial</p>
+      <p id="rev" class="muted" style="margin-top:8px">Ingresos estimados: —</p>
+      <h3 style="margin-top:16px">Top ventas por país</h3>
+      <table id="sales"><thead><tr><th>País</th><th>Unidades</th></tr></thead><tbody></tbody></table>
       <img id="img" alt="chart" style="display:none;margin-top:8px"/>
       <h3 style="margin-top:16px">Top países</h3>
       <table id="table"><thead><tr><th>País</th><th>Prob.</th></tr></thead><tbody></tbody></table>
@@ -333,6 +370,28 @@ async function pred(){
   Object.entries(data.success_by_country).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([c,v])=>{
     const tr = document.createElement('tr'); tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`; tb.appendChild(tr);
   });
+    // KPI de ingresos (usa data.revenue_global_eur)
+  const revEl = document.getElementById('rev');
+  if (revEl) {
+    revEl.textContent =
+      "Ingresos estimados: " +
+      new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' })
+        .format(data.revenue_global_eur);
+  }
+
+  // Top ventas por país (usa data.units_by_country)
+  const ts = document.querySelector('#sales tbody');
+  if (ts) {
+    ts.innerHTML = "";
+    Object.entries(data.units_by_country)
+      .sort((a,b)=>b[1]-a[1]).slice(0,5)
+      .forEach(([c,u])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c}</td><td>${u.toLocaleString('es-ES')}</td>`;
+        ts.appendChild(tr);
+      });
+  }
+
 }
 
 async function wif(){
