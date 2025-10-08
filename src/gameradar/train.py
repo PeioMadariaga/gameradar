@@ -26,51 +26,30 @@ def vectorize(batch):
 def gen_synth(n=2000, rng=np.random.default_rng(7)):
     g = np.array([rng.choice(GENRES, size=rng.integers(1,3), replace=False).tolist() for _ in range(n)], dtype=object)
     p = np.array([rng.choice(PLATFORMS, size=rng.integers(1,3), replace=False).tolist() for _ in range(n)], dtype=object)
-    price = rng.uniform(19,69,size=n).astype(np.float32)
-    budget = rng.integers(20,400,size=n).astype(np.float32)
-    sequel = rng.integers(0,2,size=n).astype(np.float32)
-    cross  = rng.integers(0,2,size=n).astype(np.float32)
-    coop   = rng.integers(0,2,size=n).astype(np.float32)
-    # score sintético
-    base = 0.45 \
-        + 0.06*(np.array(["RPG" in gi for gi in g])) \
-        + 0.05*(np.array(["Shooter" in gi for gi in g])) \
-        + 0.04*(np.array(["Sports" in gi for gi in g])) \
-        + 0.03*(np.array(["Action" in gi for gi in g])) \
-        + 0.02*(np.array(["Adventure" in gi for gi in g])) \
-        + 0.03*(np.array(["Strategy" in gi for gi in g])) \
-        + 0.02*(np.array(["Simulation" in gi for gi in g])) \
-        + 0.02*(np.array(["Family" in gi for gi in g])) \
-        + 0.02*(np.array(["Racing" in gi for gi in g])) \
-        + 0.01*(np.array(["Horror" in gi for gi in g])) \
-        + 0.04*(np.array(["Switch" in pi for pi in p])) \
-        + 0.03*cross + 0.02*coop \
-      
-    # --- Tratamiento de precio (óptimo ~60–80€) + tolerancia "premium" ---
-    ideal_low  = 45.0   # por debajo, parece "low-cost"
-    ideal_high = 85.0   # por encima, se percibe caro
-        
-    # Penalizaciones a dos lados (vectorizadas sobre arrays 'price' y 'budget')
-    pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # penaliza precios < 45€
-    pen_high = np.maximum(0.0, price - ideal_high) * 0.004   # penaliza precios > 85€
-        
-    # Señales de "premium": secuela/crossplay/coop reducen la penalización por precio alto
-    # (cross y coop vienen ya como arrays 0.0/1.0; si 'secuela' la tienes como 'is_sequel', puedes sumarla también)
-    pen_high = pen_high * np.maximum(0.8, 1.0 - 0.2*(0.6*cross + 0.4*coop))
-        
-    # Si se quiere añadir secuela a la tolerancia, descomentar esta línea y ajustar pesos:
-    # pen_high = pen_high * np.maximum(0.7, 1.0 - 0.2*(0.5*cross + 0.3*coop + 0.2*is_sequel))
-        
-    # El marketing ayuda a "tolerar" precios altos y da un empuje general
-    mk_boost = 0.0005 * (budget - 120)  # exceso sobre 120K
-        
-    # Aplicar penalizaciones/boost al score base
-    base = base - pen_low - pen_high + mk_boost
-        
-    # Recorta para evitar extremos
-    base = np.clip(base, 0.05, 0.95).astype(np.float32)
+    # --- Rango de precios y tratamiento realista ---
+price = rng.uniform(39, 99, size=n).astype(np.float32)   # extiende algo el rango
 
+# Óptimo real ~70–80 €
+ideal_low, ideal_high = 70.0, 80.0
 
+# Penalización en forma de "U" (suave) fuera del intervalo óptimo
+# Cuanto más te alejas, más penaliza (cuadrático)
+pen_low  = np.maximum(0.0, ideal_low  - price)
+pen_high = np.maximum(0.0, price - ideal_high)
+price_penalty = 0.0008*(pen_low**2) + 0.0008*(pen_high**2)
+
+# Señales "premium": secuela / crossplay / coop reducen penalización por caro
+tolerance = 1.0 - 0.25*(0.4*cross + 0.3*coop + 0.3*sequel)
+price_penalty *= np.clip(tolerance, 0.7, 1.0)
+
+# Marketing ayuda un poco a compensar precios altos
+mk_boost = 0.0004 * (budget - 120)
+
+# Aplica efectos
+base = base - price_penalty + mk_boost
+
+# Recorte final
+base = np.clip(base, 0.05, 0.95).astype(np.float32)
    
     X = vectorize({
         "genres": g, "platforms": p,
