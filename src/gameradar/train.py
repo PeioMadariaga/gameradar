@@ -45,21 +45,31 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
         + 0.01*(np.array(["Horror" in gi for gi in g])) \
         + 0.04*(np.array(["Switch" in pi for pi in p])) \
         + 0.03*cross + 0.02*coop \
-        # --- Nuevo tratamiento de precio (óptimo ~60–80€) y marketing con tolerancia ---
+      
+        # --- Tratamiento de precio (óptimo ~60–80€) + tolerancia "premium" ---
         ideal_low  = 45.0   # por debajo, parece "low-cost"
         ideal_high = 85.0   # por encima, se percibe caro
-
-        # Penalizaciones a dos lados (vectorizadas)
-        pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # < 45€
-        pen_high = np.maximum(0.0, price - ideal_high) * 0.004   # > 85€
-
-        # El marketing ayuda a "tolerar" precios altos (y da un pequeño empuje general)
-        # Usamos el exceso sobre 120K para no favorecer en exceso valores muy pequeños.
-        mk_boost = 0.0005 * (budget - 120)
-
-        # Aplica: resta penalizaciones y suma boost de marketing
+        
+        # Penalizaciones a dos lados (vectorizadas sobre arrays 'price' y 'budget')
+        pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # penaliza precios < 45€
+        pen_high = np.maximum(0.0, price - ideal_high) * 0.004   # penaliza precios > 85€
+        
+        # Señales de "premium": secuela/crossplay/coop reducen la penalización por precio alto
+        # (cross y coop vienen ya como arrays 0.0/1.0; si 'secuela' la tienes como 'is_sequel', puedes sumarla también)
+        pen_high = pen_high * np.maximum(0.8, 1.0 - 0.2*(0.6*cross + 0.4*coop))
+        
+        # Si se quiere añadir secuela a la tolerancia, descomentar esta línea y ajustar pesos:
+        # pen_high = pen_high * np.maximum(0.7, 1.0 - 0.2*(0.5*cross + 0.3*coop + 0.2*is_sequel))
+        
+        # El marketing ayuda a "tolerar" precios altos y da un empuje general
+        mk_boost = 0.0005 * (budget - 120)  # exceso sobre 120K
+        
+        # Aplicar penalizaciones/boost al score base
         base = base - pen_low - pen_high + mk_boost
+        
+        # Recorta para evitar extremos
         base = np.clip(base, 0.05, 0.95).astype(np.float32)
+
 
    
     X = vectorize({
