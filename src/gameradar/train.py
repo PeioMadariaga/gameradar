@@ -27,29 +27,29 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
     g = np.array([rng.choice(GENRES, size=rng.integers(1,3), replace=False).tolist() for _ in range(n)], dtype=object)
     p = np.array([rng.choice(PLATFORMS, size=rng.integers(1,3), replace=False).tolist() for _ in range(n)], dtype=object)
     # --- Rango de precios y tratamiento realista ---
-price = rng.uniform(39, 99, size=n).astype(np.float32)   # extiende algo el rango
-
-# Óptimo real ~70–80 €
-ideal_low, ideal_high = 70.0, 80.0
-
-# Penalización en forma de "U" (suave) fuera del intervalo óptimo
-# Cuanto más te alejas, más penaliza (cuadrático)
-pen_low  = np.maximum(0.0, ideal_low  - price)
-pen_high = np.maximum(0.0, price - ideal_high)
-price_penalty = 0.0008*(pen_low**2) + 0.0008*(pen_high**2)
-
-# Señales "premium": secuela / crossplay / coop reducen penalización por caro
-tolerance = 1.0 - 0.25*(0.4*cross + 0.3*coop + 0.3*sequel)
-price_penalty *= np.clip(tolerance, 0.7, 1.0)
-
-# Marketing ayuda un poco a compensar precios altos
-mk_boost = 0.0004 * (budget - 120)
-
-# Aplica efectos
-base = base - price_penalty + mk_boost
-
-# Recorte final
-base = np.clip(base, 0.05, 0.95).astype(np.float32)
+    price = rng.uniform(39, 99, size=n).astype(np.float32)   # extiende algo el rango
+    
+    # Óptimo real ~70–80 €
+    ideal_low, ideal_high = 70.0, 80.0
+    
+    # Penalización en forma de "U" (suave) fuera del intervalo óptimo
+    # Cuanto más te alejas, más penaliza (cuadrático)
+    pen_low  = np.maximum(0.0, ideal_low  - price)
+    pen_high = np.maximum(0.0, price - ideal_high)
+    price_penalty = 0.0008*(pen_low**2) + 0.0008*(pen_high**2)
+    
+    # Señales "premium": secuela / crossplay / coop reducen penalización por caro
+    tolerance = 1.0 - 0.25*(0.4*cross + 0.3*coop + 0.3*sequel)
+    price_penalty *= np.clip(tolerance, 0.7, 1.0)
+    
+    # Marketing ayuda un poco a compensar precios altos
+    mk_boost = 0.0004 * (budget - 120)
+    
+    # Aplica efectos
+    base = base - price_penalty + mk_boost
+    
+    # Recorte final
+    base = np.clip(base, 0.05, 0.95).astype(np.float32)
    
     X = vectorize({
         "genres": g, "platforms": p,
