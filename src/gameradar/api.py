@@ -617,7 +617,7 @@ async function predict(){
     const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
     if(!r.ok){ alert("Error "+r.status); return; }
     const data = await r.json(); lastPredict = data;
-
+    document.getElementById('btnWhat').disabled = false;
     // Badge PEGI (mantén esto si quieres mostrarlo)
     const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
     const b = document.getElementById('badgePegi');
@@ -681,7 +681,11 @@ $("#btnCopy").onclick = ()=>{
 $("#btnWhat").onclick = async ()=>{
   try {
     overlay.show(); // 🔹 aparece el spinner de carga
-
+    if (!lastPredict) {
+      await predict();
+      if (!lastPredict) { overlay.hide(); return; }
+    }
+    const base_payload = bodyBase();
     const base_payload = bodyBase();
     // Si quieres asegurar que el PEGI se envía correctamente:
     base_payload.pegi_age = parseInt(document.getElementById('pegi').value, 10);
