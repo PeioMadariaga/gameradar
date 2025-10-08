@@ -352,7 +352,7 @@ img{max-width:100%}
 #overlay { position: fixed; inset: 0; display:none; place-items: center; backdrop-filter: blur(2px); }
 .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #3a4a6a; border-top-color: #5ce1e6; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
-#confetti { position: fixed; inset: 0; pointer-events: none; display:none; }
+
 
 .grid-genres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 @media (min-width:900px){.grid-genres{grid-template-columns:repeat(4,1fr)}}
@@ -488,228 +488,236 @@ img{max-width:100%}
   </div>
 </div>
 <div id="overlay"><div class="spinner"></div></div>
-<canvas id="confetti"></canvas>
 <script>
-const API = location.origin;
-const $ = s => document.querySelector(s);
-const $all = s => [...document.querySelectorAll(s)];
+document.addEventListener("DOMContentLoaded", () => {
+  const API = location.origin;
+  const $ = s => document.querySelector(s);
+  const $all = s => [...document.querySelectorAll(s)];
 
-// Banderas y nombres
-const FLAGS = { ES:"🇪🇸", US:"🇺🇸", JP:"🇯🇵", BR:"🇧🇷", FR:"🇫🇷", DE:"🇩🇪", GB:"🇬🇧", IT:"🇮🇹" };
-const NAMES = { ES:"España", US:"Estados Unidos", JP:"Japón", BR:"Brasil", FR:"Francia", DE:"Alemania", GB:"Reino Unido", IT:"Italia" };
+  // Helpers
+  function headers(){ return {"Content-Type":"application/json"}; }
+  function checked(name){ return $all('input[name="'+name+'"]:checked').map(x=>x.value); }
+  const fmtPct = x => (x*100).toFixed(1) + "%";
+  const fmtInt = x => Number(x).toLocaleString('es-ES');
 
-// Utilidades
-function gaugeColor(p){ const r=Math.round(255*(1-p)), g=Math.round(255*p); return `rgb(${r},${g},80)`; }
-const fmtPct = x => (x*100).toFixed(1)+"%";
-const fmtInt = x => Number(x).toLocaleString('es-ES');
-function headers(){ return {"Content-Type":"application/json"}; }
-function checked(name){ return $all(`input[name="${name}"]:checked`).map(x=>x.value); }
-function bodyBase(){
-  return {
-    genres: checked("genre"),
-    platforms: checked("plat"),
-    price_eur: parseFloat($("#price").value),
-    marketing_budget_k: parseFloat($("#mk").value),
-    is_sequel: $("#seq").checked,
-    has_crossplay: $("#cross").checked,
-    coop: $("#coop").checked,
-    pegi_age: parseInt($("#pegi").value,10)
-  };
-}
-
-// Overlay
-const overlay = { show(){ $("#overlay").style.display='grid'; }, hide(){ $("#overlay").style.display='none'; } };
-
-// Tema
-const themeEl = $("#theme");
-function applyTheme(){ document.documentElement.setAttribute("data-theme", themeEl.checked ? "light":"dark"); }
-themeEl.onchange = applyTheme; applyTheme();
-
-// Tabs
-$all(".tab").forEach(t=>t.onclick=()=>{
-  $all(".tab").forEach(x=>x.classList.remove("active"));
-  t.classList.add("active");
-  $all(".section").forEach(x=>x.classList.remove("active"));
-  $("#tab-"+t.dataset.tab).classList.add("active");
-});
-
-// Animación gauge
-function animateGauge(p){
-  const deg = Math.round(p*360);
-  $("#gauge").style.setProperty("--p", deg+"deg");
-  const target = Math.round(p*1000)/10;
-  let cur = 0;
-  const step = ()=>{
-    cur += Math.max(0.3,(target-cur)/10);
-    $("#pct").textContent = cur.toFixed(1)+"%";
-    if(cur<target-0.1) requestAnimationFrame(step);
-  };
-  $("#pctTxt").textContent = target.toFixed(1)+"%";
-  requestAnimationFrame(step);
-}
-
-function renderCountries(data){
-  const body = $("#tbodyCountries"); if(!body) return;
-  body.innerHTML = "";
-  const rows = Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country?data.units_by_country[c]:null]);
-  rows.sort((a,b)=>b[1]-a[1]);
-  rows.forEach(([c,p,u])=>{
-    const tr = document.createElement('tr');
-    const flag = FLAGS[c] || "🏳️", name = NAMES[c] || c;
-    tr.innerHTML = `
-      <td><span class="flag">${flag}</span>${name}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="bar" style="flex:1"><div class="bar-fill" style="width:${(p*100).toFixed(0)}%"></div></div>
-          <div ${p>=0.5?'class="win"':'class="lose"'}>${fmtPct(p)}</div>
-        </div>
-      </td>
-      <td>${u!=null ? fmtInt(u) : "—"}</td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-let lastPredict = null;
-
-// PREDICT
-async function predict(){
-  try{
-    overlay.show();
-    const body = bodyBase();
-    const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
-    if(!r.ok){ alert("Error "+r.status); return; }
-    const data = await r.json(); lastPredict = data;
-
-    // habilita What-if
-    const btnW = $("#btnWhat"); if(btnW) btnW.disabled = false;
-
-    // Badge PEGI
-    const pegi = (data.pegi_age ?? parseInt($("#pegi").value,10));
-    const b = $("#badgePegi");
-    if (b) {
-      b.textContent = "PEGI: " + pegi;
-      b.style.padding = "4px 8px";
-      b.style.borderRadius = "999px";
-      b.style.border = "1px solid var(--line)";
-      b.style.background = (pegi >= 18 ? "#4a0f0f" : pegi >= 16 ? "#4a2f0f" : "transparent");
-    }
-
-    // KPI
-    const p = data.success_worldwide;
-    $("#gauge").style.background = `conic-gradient(${gaugeColor(p)} ${Math.round(p*360)}deg, #2a3347 0)`;
-    animateGauge(p);
-    $("#rev").textContent = "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
-
-    // Badges selección
-    $("#badgeGen").textContent  = "Géneros: " + (body.genres.join(", ") || "—");
-    $("#badgePlat").textContent = "Plataformas: " + (body.platforms.join(", ") || "—");
-
-    // Gráfico
-    const img = $("#img"); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
-
-    // Tabla países
-    renderCountries(data);
-
-  } finally {
-    overlay.hide();
+  // Gauge
+  function gaugeColor(p){
+    const r = Math.round(255*(1-p)), g = Math.round(255*p);
+    return `rgb(${r},${g},80)`;
   }
-}
+  function animateGauge(p){
+    const deg = Math.round(p*360);
+    $("#gauge").style.background = `conic-gradient(${gaugeColor(p)} ${deg}deg, #2a3347 0)`;
+    const target = Math.round(p*1000)/10; let cur = 0;
+    const step = () => { cur += Math.max(0.3,(target-cur)/10); $("#pct").textContent = cur.toFixed(1)+"%"; if(cur<target-0.1) requestAnimationFrame(step); };
+    $("#pctTxt").textContent = target.toFixed(1)+"%";
+    requestAnimationFrame(step);
+  }
 
-// WHAT-IF
-async function runWhatIf(){
-  overlay.show();
-  try {
-    if (!lastPredict) { await predict(); if(!lastPredict) return; }
+  // Construye payload desde el formulario
+  function bodyBase(){
+    // OJO con comas decimales: sustituimos ',' por '.'
+    const price = parseFloat($("#price").value.replace(",", "."));
+    const mk = parseFloat($("#mk").value.replace(",", "."));
+    return {
+      genres: checked("genre"),
+      platforms: checked("plat"),
+      price_eur: isNaN(price) ? 39.99 : price,
+      marketing_budget_k: isNaN(mk) ? 120 : mk,
+      is_sequel: $("#seq").checked,
+      has_crossplay: $("#cross").checked,
+      coop: $("#coop").checked,
+      pegi_age: parseInt($("#pegi").value, 10)
+    };
+  }
 
-    const base_payload = bodyBase();
-    const variants = [
-      {"price_eur": base_payload.price_eur - 10},
-      {"price_eur": base_payload.price_eur + 10},
-      {"marketing_budget_k": base_payload.marketing_budget_k + 80},
-      {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
-      {"coop": !base_payload.coop}
-    ];
-
-    const r = await fetch(API + "/whatif", { method:"POST", headers: headers(), body: JSON.stringify({ base_payload, variants }) });
-    if (!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} throw new Error("HTTP "+r.status+" – "+(typeof p==="string"?p:JSON.stringify(p))); }
-
-    const data = await r.json();
-    const wrap = $("#whatCards"); wrap.innerHTML = "";
-    data.variants.forEach(v=>{
-      const up = v.delta >= 0;
-      const card = document.createElement("div");
-      card.className = "card"; card.style.width = "220px";
-      card.innerHTML = `
-        <div class="small" style="opacity:.8">${v.change}</div>
-        <div style="font-weight:800;font-size:22px">${(v.success_worldwide * 100).toFixed(1)}%</div>
-        <div style="color:${up ? 'var(--ok)' : 'var(--bad)'};font-weight:700">
-          ${up ? '▲' : '▼'} ${(v.delta * 100).toFixed(1)} pp
-        </div>`;
-      wrap.appendChild(card);
+  // Tabla países
+  const FLAGS = { ES:"🇪🇸", US:"🇺🇸", JP:"🇯🇵", BR:"🇧🇷", FR:"🇫🇷", DE:"🇩🇪", GB:"🇬🇧", IT:"🇮🇹" };
+  const NAMES = { ES:"España", US:"Estados Unidos", JP:"Japón", BR:"Brasil", FR:"Francia", DE:"Alemania", GB:"Reino Unido", IT:"Italia" };
+  function renderCountries(data){
+    const body = $("#tbodyCountries"); if(!body) return;
+    body.innerHTML = "";
+    const rows = Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country ? data.units_by_country[c] : null])
+      .sort((a,b)=>b[1]-a[1]);
+    rows.forEach(([c,p,u])=>{
+      const tr = document.createElement('tr');
+      const flag = FLAGS[c] || "🏳️";
+      const name = NAMES[c] || c;
+      tr.innerHTML = `
+        <td><span class="flag">${flag}</span>${name}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="bar" style="flex:1"><div class="bar-fill" style="width:${(p*100).toFixed(0)}%"></div></div>
+            <div ${p>=0.5?'class="win"':'class="lose"'}>${fmtPct(p)}</div>
+          </div>
+        </td>
+        <td>${u!=null ? fmtInt(u) : "—"}</td>
+      `;
+      body.appendChild(tr);
     });
-    document.querySelector('.tab[data-tab="whatif"]').click();
-  } catch(err){
-    console.error(err);
-    alert("No se pudo ejecutar What-if.\n" + err.message);
-  } finally {
-    overlay.hide();
   }
-}
 
-// Curva de precio
-async function drawPriceCurve(){
-  const payload = bodyBase();
-  const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
-  if(!r.ok){ return; }
-  const data = await r.json();
-  const cv = $("#cv"), ctx = cv.getContext("2d");
-  const W = cv.width = cv.clientWidth*2, H = cv.height = 240;
-  ctx.clearRect(0,0,W,H);
-  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
-  ctx.beginPath(); ctx.moveTo(40,H-30); ctx.lineTo(W-10,H-30); ctx.moveTo(40,H-30); ctx.lineTo(40,10); ctx.stroke();
-  const ps = data.points, xs=ps.map(p=>p[0]), ys=ps.map(p=>p[1]);
-  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=0, maxy=Math.max(1, ...ys);
-  const sx=x=> 40 + (x-minx)/(maxx-minx) * (W-60);
-  const sy=y=> (H-30) - (y-miny)/(maxy-miny) * (H-50);
-  ctx.beginPath(); ctx.strokeStyle = "#29b5ff"; ctx.lineWidth=3;
-  ps.forEach((p,i)=>{ const x=sx(p[0]), y=sy(p[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-  ctx.stroke();
-  const bx = sx(data.best_price), by = sy(data.best_prob);
-  ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
-  $("#best").textContent = "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
-}
-document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
+  // Overlay
+  const overlay = {
+    show(){ $("#overlay").style.display='grid'; },
+    hide(){ $("#overlay").style.display='none'; }
+  };
 
-// Acciones botonería
-document.getElementById('btnPred').addEventListener('click', e=>{ e.preventDefault(); predict(); });
-document.getElementById('btnWhat').addEventListener('click', e=>{ e.preventDefault(); runWhatIf(); });
-document.getElementById('btnDownload').onclick = ()=>{
-  if(!lastPredict) return;
-  const a = document.createElement('a');
-  a.href = "data:image/png;base64," + lastPredict.heatmap_base64;
-  a.download = "gameradar_paises.png";
-  a.click();
-};
-document.getElementById('btnCopy').onclick = ()=>{
-  if(!lastPredict) return;
-  navigator.clipboard.writeText(JSON.stringify(lastPredict, null, 2));
-};
+  let lastPredict = null;
 
-// Estado inicial “limpio”
-function clearUI(){
-  $("#gauge").style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
-  $("#pct").textContent = '—';
-  $("#pctTxt").textContent = '—';
-  $("#rev").textContent = 'Ingresos estimados: —';
-  const b = $("#badgePegi"); if (b) { b.textContent = "PEGI: 12"; b.style.background = "transparent"; }
-  const img = $("#img"); img.style.display = 'none'; img.src = '';
-  const body = $("#tbodyCountries"); if (body) body.innerHTML = '';
-  $("#whatCards").innerHTML = '';
-  const btnW = $("#btnWhat"); if (btnW) btnW.disabled = true;
-  lastPredict = null;
-}
-clearUI();
+  // Predicción
+  async function predict(){
+    overlay.show();
+    try{
+      const body = bodyBase();
+      const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
+      if(!r.ok){ throw new Error("HTTP "+r.status); }
+      const data = await r.json(); lastPredict = data;
+
+      // Habilita What-if
+      const w = $("#btnWhat"); if (w) w.disabled = false;
+
+      // PEGI
+      const b = $("#badgePegi");
+      if (b) {
+        b.textContent = "PEGI: " + (data.pegi_age ?? body.pegi_age);
+        b.style.padding = "4px 8px";
+        b.style.borderRadius = "999px";
+        b.style.border = "1px solid var(--line)";
+        b.style.background = (data.pegi_age>=18 ? "#4a0f0f" : data.pegi_age>=16 ? "#4a2f0f" : "transparent");
+      }
+
+      // KPI + ingresos
+      animateGauge(data.success_worldwide);
+      $("#rev").textContent = new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
+      $("#rev").textContent = "Ingresos estimados: " + $("#rev").textContent;
+
+      // Badges
+      $("#badgeGen").textContent  = "Géneros: " + (body.genres.join(", ") || "—");
+      $("#badgePlat").textContent = "Plataformas: " + (body.platforms.join(", ") || "—");
+
+      // Gráfico
+      const img = $("#img"); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display = "block";
+
+      // Países
+      renderCountries(data);
+    } catch(err){
+      console.error(err);
+      alert("No se pudo predecir: " + err.message);
+    } finally {
+      overlay.hide();
+    }
+  }
+
+  // What-if
+  async function runWhatIf(){
+    overlay.show();
+    try{
+      if(!lastPredict){ await predict(); if(!lastPredict) return; }
+      const base_payload = bodyBase();
+      const variants = [
+        {"price_eur": base_payload.price_eur - 10},
+        {"price_eur": base_payload.price_eur + 10},
+        {"marketing_budget_k": base_payload.marketing_budget_k + 80},
+        {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
+        {"coop": !base_payload.coop}
+      ];
+      const r = await fetch(API + "/whatif", {method:"POST", headers: headers(), body: JSON.stringify({ base_payload, variants })});
+      if(!r.ok){ throw new Error("HTTP "+r.status); }
+      const data = await r.json();
+
+      const wrap = $("#whatCards"); wrap.innerHTML = "";
+      data.variants.forEach(v=>{
+        const up = v.delta >= 0;
+        const card = document.createElement('div');
+        card.className = "card";
+        card.style.width="220px";
+        card.innerHTML = `
+          <div class="small" style="opacity:.8">${v.change}</div>
+          <div style="font-weight:800;font-size:22px">${(v.success_worldwide*100).toFixed(1)}%</div>
+          <div style="color:${up?'var(--ok)':'var(--bad)'};font-weight:700">${up?'▲':'▼'} ${(v.delta*100).toFixed(1)} pp</div>
+        `;
+        wrap.appendChild(card);
+      });
+
+      // Cambia a pestaña What-if
+      document.querySelector('.tab[data-tab="whatif"]').click();
+    } catch(err){
+      console.error(err);
+      alert("No se pudo ejecutar What-if: " + err.message);
+    } finally {
+      overlay.hide();
+    }
+  }
+
+  // Curva precio
+  async function drawPriceCurve(){
+    const payload = bodyBase();
+    const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
+    if(!r.ok){ return; }
+    const data = await r.json();
+    const cv = $("#cv"); const ctx=cv.getContext("2d"); const W=cv.width= cv.clientWidth*2; const H=cv.height= 240;
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
+    ctx.beginPath(); ctx.moveTo(40,H-30); ctx.lineTo(W-10,H-30); ctx.moveTo(40,H-30); ctx.lineTo(40,10); ctx.stroke();
+    const ps = data.points; const xs=ps.map(p=>p[0]), ys=ps.map(p=>p[1]);
+    const minx=Math.min(...xs), maxx=Math.max(...xs), miny=0, maxy=Math.max(1, ...ys);
+    const sx=x=> 40 + (x-minx)/(maxx-minx) * (W-60);
+    const sy=y=> (H-30) - (y-miny)/(maxy-miny) * (H-50);
+    ctx.beginPath(); ctx.strokeStyle = "#29b5ff"; ctx.lineWidth=3;
+    ps.forEach((p,i)=>{ const x=sx(p[0]), y=sy(p[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+    ctx.stroke();
+    const bx = sx(data.best_price), by = sy(data.best_prob);
+    ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
+    $("#best").textContent = "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
+  }
+
+  // Tabs
+  $all(".tab").forEach(t=>t.addEventListener("click", ()=>{
+    $all(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    $all(".section").forEach(x=>x.classList.remove("active"));
+    $("#tab-"+t.dataset.tab).classList.add("active");
+  }));
+
+  // Tema
+  const themeEl = $("#theme");
+  function applyTheme(){ document.documentElement.setAttribute("data-theme", themeEl.checked ? "light":"dark"); }
+  themeEl.addEventListener("change", applyTheme);
+  applyTheme();
+
+  // Botones
+  $("#btnPred").addEventListener("click", ()=>{ predict(); });
+  $("#btnWhat").addEventListener("click", ()=>{ runWhatIf(); });
+
+  // Descargar / Copiar
+  $("#btnDownload").addEventListener("click", ()=>{
+    if(!lastPredict) return;
+    const a = document.createElement('a');
+    a.href = "data:image/png;base64," + lastPredict.heatmap_base64;
+    a.download = "gameradar_paises.png";
+    a.click();
+  });
+  $("#btnCopy").addEventListener("click", ()=>{
+    if(!lastPredict) return;
+    navigator.clipboard.writeText(JSON.stringify(lastPredict, null, 2));
+  });
+
+  // Curva precio al abrir su pestaña
+  document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
+
+  // Estado inicial limpio
+  (function clearUI(){
+    $("#gauge").style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
+    $("#pct").textContent = '—'; $("#pctTxt").textContent = '—';
+    $("#rev").textContent = 'Ingresos estimados: —';
+    const b = $("#badgePegi"); if (b){ b.textContent = "PEGI: —"; b.style.background = "transparent"; }
+    const img = $("#img"); img.style.display = 'none'; img.src = '';
+    const body = $("#tbodyCountries"); if (body) body.innerHTML = '';
+    $("#whatCards").innerHTML = ''; $("#btnWhat").disabled = true;
+    lastPredict = null;
+  })();
+});
 </script>
 </body>
 </html>
