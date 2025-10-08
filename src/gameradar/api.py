@@ -395,32 +395,53 @@ async function pred(){
 }
 
 async function wif(){
+  const genres = checked("genre");
+  const plats  = checked("plat");
   const base_payload = {
-    genres: checked("genre"),
-    platforms: checked("plat"),
+    genres, platforms: plats,
     price_eur: n(document.getElementById('price').value),
     marketing_budget_k: n(document.getElementById('mk').value),
     is_sequel: document.getElementById('seq').checked,
     has_crossplay: document.getElementById('cross').checked,
     coop: document.getElementById('coop').checked
   };
+
   const variants = [
     {"price_eur": base_payload.price_eur - 10},
-    {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
-    {"marketing_budget_k": base_payload.marketing_budget_k + 80}
+    {"price_eur": base_payload.price_eur + 10},
+    {"marketing_budget_k": base_payload.marketing_budget_k + 80},
+    {"platforms": Array.from(new Set([...plats, "PS5", "Xbox"]))},
+    {"coop": !base_payload.coop}
   ];
-  const r = await fetch(API + "/whatif", {method:"POST", headers: headers(), body: JSON.stringify({base_payload, variants})});
-  if(!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} alert("Error "+r.status+"\\n"+(typeof p==="string"?p:JSON.stringify(p))); return; }
+
+  const headers = {"Content-Type":"application/json"};
+  const key = document.getElementById('apikey').value.trim();
+  if(key) headers["X-API-Key"] = key;
+
+  const r = await fetch(API + "/whatif", {
+    method:"POST",
+    headers,
+    body: JSON.stringify({base_payload, variants})
+  });
   const data = await r.json();
-  const tb = document.querySelector('#what tbody'); tb.innerHTML="";
+
+  // Actualiza también la probabilidad base (último valor)
+  document.getElementById('world').textContent =
+    (data.base*100).toFixed(1) + "% (base)";
+
+  const tb = document.querySelector('#what tbody');
+  tb.innerHTML = "";
   data.variants.forEach(v=>{
-    const sign = v.delta >= 0 ? "▲" : "▼";
-    const color = v.delta >= 0 ? "style='color:#5ce1e6;font-weight:700'" : "style='color:#f87171;font-weight:700'";
+    const delta = (v.delta*100).toFixed(1);
+    const color = v.delta >= 0 ? "lime" : "salmon";
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${v.change}</td><td>${(v.success_worldwide*100).toFixed(1)}%</td><td ${color}>${sign} ${(v.delta*100).toFixed(1)} pp</td>`;
+    tr.innerHTML = `<td>${v.change}</td>
+                    <td>${(v.success_worldwide*100).toFixed(1)}%</td>
+                    <td style="color:${color}">${delta} pp</td>`;
     tb.appendChild(tr);
   });
 }
+
 </script>
 </body></html>
     """
