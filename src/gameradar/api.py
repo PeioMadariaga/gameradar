@@ -325,6 +325,18 @@ button.primary{background:var(--accent);border:none;font-weight:700;color:#002}
 canvas{width:100%;height:220px;border:1px solid var(--line);border-radius:12px;background:#0e1628}
 .theme{position:fixed;right:16px;top:16px}
 img{max-width:100%}
+/* Barra mini dentro de la celda */
+.bar { position: relative; height: 10px; background: #223; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg,#ef4444,#22c55e); transition: width .5s; }
+.flag { font-size: 18px; margin-right: 6px }
+.win { color: #22c55e; font-weight: 700 }
+.lose { color: #f87171; font-weight: 700 }
+
+/* Overlay de carga y confetti */
+#overlay { position: fixed; inset: 0; display:none; place-items: center; backdrop-filter: blur(2px); }
+.spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #3a4a6a; border-top-color: #5ce1e6; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+#confetti { position: fixed; inset: 0; pointer-events: none; display:none; }
 </style>
 </head>
 <body>
@@ -446,12 +458,87 @@ img{max-width:100%}
     </div>
   </div>
 </div>
-
+<div id="overlay"><div class="spinner"></div></div>
+<canvas id="confetti"></canvas>
 <script>
 const API = location.origin;
 const $ = s => document.querySelector(s);
 const $all = s => [...document.querySelectorAll(s)];
-function headers(){ const h={"Content-Type":"application/json"}; const k=$("#apikey").value.trim(); if(k) h["X-API-Key"]=k; return h; }
+// Banderas y nombre "bonito" de país
+const FLAGS = { ES:"🇪🇸", US:"🇺🇸", JP:"🇯🇵", BR:"🇧🇷", FR:"🇫🇷", DE:"🇩🇪", GB:"🇬🇧", IT:"🇮🇹" };
+const NAMES = { ES:"España", US:"Estados Unidos", JP:"Japón", BR:"Brasil", FR:"Francia", DE:"Alemania", GB:"Reino Unido", IT:"Italia" };
+
+// Color del gauge según porcentaje
+function gaugeColor(p){ // p in [0..1]
+  // rojo (0) -> amarillo (0.5) -> verde (1)
+  const r = Math.round(255 * (1-p));
+  const g = Math.round(255 * p);
+  return `rgb(${r},${g},80)`;
+}
+// Formatos
+const fmtPct = x => (x*100).toFixed(1) + "%";
+const fmtMoney = x => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(x);
+const fmtInt = x => Number(x).toLocaleString('es-ES');
+
+function launchConfetti(ms=1500){
+  const cv = document.getElementById('confetti'); const ctx = cv.getContext('2d');
+  const DPR = window.devicePixelRatio || 1; cv.style.display='block';
+  const W = cv.width = innerWidth * DPR, H = cv.height = innerHeight * DPR;
+  const parts = Array.from({length: 180}, ()=>({
+    x: Math.random()*W, y: -20*DPR, vy: (2+Math.random()*3)*DPR,
+    vx: (Math.random()*2-1)*DPR, s: (4+Math.random()*6)*DPR,
+    c: `hsl(${Math.random()*360},90%,60%)`, r: Math.random()*Math.PI
+  }));
+  let alive=true; const tEnd=performance.now()+ms;
+  (function anim(){
+    ctx.clearRect(0,0,W,H);
+    parts.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.04*DPR; p.r+=0.1;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r);
+      ctx.fillStyle=p.c; ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s); ctx.restore();
+    });
+    parts.forEach((p,i)=>{ if(p.y>H+50*DPR) parts.splice(i,1); });
+    if(alive && performance.now()<tEnd) requestAnimationFrame(anim);
+    else { cv.style.display='none'; }
+  })();
+}
+const overlay = {
+  show(){ document.getElementById('overlay').style.display='grid'; },
+  hide(){ document.getElementById('overlay').style.display='none'; }
+};
+
+function renderCountries(data){
+  const body = document.getElementById('tbodyCountries'); if(!body) return;
+  body.innerHTML = "";
+  // construimos array [pais, prob, units]
+  const rows = Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country ? data.units_by_country[c] : null]);
+  rows.sort((a,b)=>b[1]-a[1]);
+  rows.forEach(([c,p,u])=>{
+    const tr = document.createElement('tr');
+    const flag = FLAGS[c] || "🏳️";
+    const name = NAMES[c] || c;
+    tr.innerHTML = `
+      <td><span class="flag">${flag}</span>${name}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="bar" style="flex:1"><div class="bar-fill" style="width:${(p*100).toFixed(0)}%"></div></div>
+          <div ${p>=0.5?'class="win"':'class="lose"'}>${fmtPct(p)}</div>
+        </div>
+      </td>
+      <td>${u!=null ? fmtInt(u) : "—"}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+
+function headers(){
+  const h={"Content-Type":"application/json"};
+  const el = $("#apikey");
+  const k = el ? el.value.trim() : "";
+  if(k) h["X-API-Key"]=k;
+  return h;
+}
 function checked(name){ return $all('input[name="'+name+'"]:checked').map(x=>x.value); }
 function bodyBase(){
   return {
@@ -494,40 +581,57 @@ function animateGauge(p){ // p en [0,1]
 }
 
 async function predict(){
-  const body = bodyBase();
-  const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
-  if(!r.ok){ alert("Error "+r.status); return; }
-  const data = await r.json(); lastPredict = data;
-  const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
-  const b = document.getElementById('badgePegi');
-   if (b) {
-     b.textContent = "PEGI: " + pegi;
-     b.style.padding = "4px 8px";
-     b.style.borderRadius = "999px";
-     b.style.border = "1px solid var(--line)";
-     b.style.background = (pegi >= 18 ? "#4a0f0f" : pegi >= 16 ? "#4a2f0f" : "transparent");
-   }
-  // KPI
-  animateGauge(data.success_worldwide);
-  $("#rev").textContent = "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
+  try{
+    overlay.show();
 
-  // badges
-  $("#badgeGen").textContent = "Géneros: " + (body.genres.join(", ") || "—");
-  $("#badgePlat").textContent = "Plataformas: " + (body.platforms.join(", ") || "—");
+    const body = bodyBase();
+    const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
+    if(!r.ok){ alert("Error "+r.status); return; }
+    const data = await r.json(); lastPredict = data;
 
-  // imagen
-  const img = $("#img"); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
+    // Badge PEGI (mantén esto si quieres mostrarlo)
+    const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
+    const b = document.getElementById('badgePegi');
+    if (b) {
+      b.textContent = "PEGI: " + pegi;
+      b.style.padding = "4px 8px";
+      b.style.borderRadius = "999px";
+      b.style.border = "1px solid var(--line)";
+      b.style.background = (pegi >= 18 ? "#4a0f0f" : pegi >= 16 ? "#4a2f0f" : "transparent");
+    }
 
-  // tabla países
-  const tb = $("#tbodyCountries"); tb.innerHTML="";
-  Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country[c]])
-    .sort((a,b)=>b[1]-a[1])
-    .forEach(([c,p,u])=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${c}</td><td>${(p*100).toFixed(1)}%</td><td>${u.toLocaleString('es-ES')}</td>`;
-      tb.appendChild(tr);
-    });
+    // KPI: gauge con color + contador
+    const p = data.success_worldwide;
+    document.getElementById('gauge').style.background =
+      `conic-gradient(${gaugeColor(p)} ${Math.round(p*360)}deg, #2a3347 0)`;
+    animateGauge(p);
+
+    // Ingresos
+    document.getElementById('rev').textContent =
+      "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
+
+    // Badges de selección
+    document.getElementById('badgeGen').textContent =
+      "Géneros: " + (body.genres.join(", ") || "—");
+    document.getElementById('badgePlat').textContent =
+      "Plataformas: " + (body.platforms.join(", ") || "—");
+
+    // Imagen (barras por país generadas en el backend)
+    const img = document.getElementById('img');
+    img.src = "data:image/png;base64," + data.heatmap_base64;
+    img.style.display="block";
+
+    // Tabla de países con banderas + barras + % + unidades
+    renderCountries(data);
+
+    // Confetti si muy alto
+    if (p >= 0.85) launchConfetti();
+
+  } finally {
+    overlay.hide();
+  }
 }
+
 
 $("#btnPred").onclick = predict;
 
@@ -546,34 +650,58 @@ $("#btnCopy").onclick = ()=>{
 
 // WHAT-IF
 $("#btnWhat").onclick = async ()=>{
-  const base_payload = bodyBase();
-  base_payload.pegi_age = parseInt(document.getElementById('pegi').value, 10);
-  const variants = [
-    {"price_eur": base_payload.price_eur - 10},
-    {"price_eur": base_payload.price_eur + 10},
-    {"marketing_budget_k": base_payload.marketing_budget_k + 80},
-    {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
-    {"coop": !base_payload.coop}
-  ];
-  const r = await fetch(API + "/whatif", {method:"POST", headers: headers(), body: JSON.stringify({base_payload, variants})});
-  if(!r.ok){ alert("Error "+r.status); return; }
-  const data = await r.json();
+  try {
+    overlay.show(); // 🔹 aparece el spinner de carga
 
-  const wrap = $("#whatCards"); wrap.innerHTML = "";
-  data.variants.forEach(v=>{
-    const up = v.delta >= 0;
-    const card = document.createElement('div');
-    card.className = "card";
-    card.style.width="220px";
-    card.innerHTML = `
-      <div class="small" style="opacity:.8">${v.change}</div>
-      <div style="font-weight:800;font-size:22px">${(v.success_worldwide*100).toFixed(1)}%</div>
-      <div style="color:${up?'var(--ok)':'var(--bad)'};font-weight:700">${up?'▲':'▼'} ${(v.delta*100).toFixed(1)} pp</div>
-    `;
-    wrap.appendChild(card);
-  });
-  // cambia a pestaña what-if
-  document.querySelector('.tab[data-tab="whatif"]').click();
+    const base_payload = bodyBase();
+    // Si quieres asegurar que el PEGI se envía correctamente:
+    base_payload.pegi_age = parseInt(document.getElementById('pegi').value, 10);
+
+    const variants = [
+      {"price_eur": base_payload.price_eur - 10},
+      {"price_eur": base_payload.price_eur + 10},
+      {"marketing_budget_k": base_payload.marketing_budget_k + 80},
+      {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
+      {"coop": !base_payload.coop}
+    ];
+
+    const r = await fetch(API + "/whatif", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ base_payload, variants })
+    });
+
+    if (!r.ok) {
+      alert("Error " + r.status);
+      return;
+    }
+
+    const data = await r.json();
+
+    const wrap = document.getElementById("whatCards");
+    wrap.innerHTML = "";
+
+    data.variants.forEach(v => {
+      const up = v.delta >= 0;
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.width = "220px";
+      card.innerHTML = `
+        <div class="small" style="opacity:.8">${v.change}</div>
+        <div style="font-weight:800;font-size:22px">${(v.success_worldwide * 100).toFixed(1)}%</div>
+        <div style="color:${up ? 'var(--ok)' : 'var(--bad)'};font-weight:700">
+          ${up ? '▲' : '▼'} ${(v.delta * 100).toFixed(1)} pp
+        </div>
+      `;
+      wrap.appendChild(card);
+    });
+
+    // Cambia automáticamente a la pestaña What-if
+    document.querySelector('.tab[data-tab="whatif"]').click();
+
+  } finally {
+    overlay.hide(); // oculta el spinner, pase lo que pase
+  }
 };
 
 // CURVA DE PRECIO
