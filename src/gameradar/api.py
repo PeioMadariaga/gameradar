@@ -383,8 +383,8 @@ img{max-width:100%}
          <div>
             <label>Géneros</label><br/>
             <div class="grid-genres">
-              <label class="pill"><input type="checkbox" name="genre" value="RPG" checked>RPG</label>
-              <label class="pill"><input type="checkbox" name="genre" value="Adventure" checked>Adventure</label>
+              <label class="pill"><input type="checkbox" name="genre" value="RPG">RPG</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Adventure">Adventure</label>
               <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
               <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
               <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
@@ -403,10 +403,10 @@ img{max-width:100%}
       <div class="input-row">
         <div>
           <label>Plataformas</label><br/>
-          <label class="pill"><input type="checkbox" name="plat" value="PC" checked>PC</label>
-          <label class="pill"><input type="checkbox" name="plat" value="PS5" checked>PS5</label>
+          <label class="pill"><input type="checkbox" name="plat" value="PC">PC</label>
+          <label class="pill"><input type="checkbox" name="plat" value="PS5">PS5</label>
           <label class="pill"><input type="checkbox" name="plat" value="Xbox">Xbox</label>
-          <label class="pill"><input type="checkbox" name="plat" value="Switch" checked>Switch</label>
+          <label class="pill"><input type="checkbox" name="plat" value="Switch">Switch</label>
         </div>
       </div>
 
@@ -760,7 +760,34 @@ async function drawPriceCurve(){
 document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
 
 // predicción inicial para que entre con algo
-predict();
+// predict();
+function clearUI(){
+  // KPI
+  document.getElementById('gauge').style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
+  document.getElementById('pct').textContent = '—';
+  document.getElementById('pctTxt').textContent = '—';
+  document.getElementById('rev').textContent = 'Ingresos estimados: —';
+  const b = document.getElementById('badgePegi');
+  if (b) { b.textContent = "PEGI: —"; b.style.background = "transparent"; }
+
+  // Gráfico
+  const img = document.getElementById('img');
+  img.style.display = 'none';
+  img.src = '';
+
+  // Tabla países
+  const body = document.getElementById('tbodyCountries');
+  if (body) body.innerHTML = '';
+
+  // What-if
+  document.getElementById("whatCards").innerHTML = '';
+  document.getElementById("btnWhat").disabled = true;
+
+  // Limpia último resultado
+  lastPredict = null;
+}
+// Llama al cargar
+clearUI();
 </script>
 </body>
 </html>
