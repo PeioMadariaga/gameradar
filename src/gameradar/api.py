@@ -611,7 +611,7 @@ async function predict(){
     // Tabla países
     renderCountries(data);
 
-    if (p >= 0.85) launchConfetti();
+   // if (p >= 0.85) launchConfetti();
   } finally {
     overlay.hide();
   }
