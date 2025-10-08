@@ -50,7 +50,7 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
         ideal_high = 85.0   # por encima, se percibe caro
 
         # Penalizaciones a dos lados (vectorizadas)
-        pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # < 40€
+        pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # < 45€
         pen_high = np.maximum(0.0, price - ideal_high) * 0.004   # > 85€
 
         # El marketing ayuda a "tolerar" precios altos (y da un pequeño empuje general)
@@ -61,8 +61,7 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
         base = base - pen_low - pen_high + mk_boost
         base = np.clip(base, 0.05, 0.95).astype(np.float32)
 
-    base = np.clip(base, 0.05, 0.95).astype(np.float32)
-
+   
     X = vectorize({
         "genres": g, "platforms": p,
         "price_eur": price, "marketing_budget_k": budget,
