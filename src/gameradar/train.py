@@ -32,7 +32,6 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
     cross  = rng.integers(0,2,size=n).astype(np.float32)
     coop   = rng.integers(0,2,size=n).astype(np.float32)
     # score sintético
-    # score sintético
     base = 0.45 \
         + 0.06*(np.array(["RPG" in gi for gi in g])) \
         + 0.05*(np.array(["Shooter" in gi for gi in g])) \
@@ -46,7 +45,22 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
         + 0.01*(np.array(["Horror" in gi for gi in g])) \
         + 0.04*(np.array(["Switch" in pi for pi in p])) \
         + 0.03*cross + 0.02*coop \
-        - 0.0015*(price-39) + 0.0006*(budget-120)
+        # --- Nuevo tratamiento de precio (óptimo ~60–80€) y marketing con tolerancia ---
+        ideal_low  = 50.0   # por debajo, parece "low-cost"
+        ideal_high = 80.0   # por encima, se percibe caro
+
+        # Penalizaciones a dos lados (vectorizadas)
+        pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # < 40€
+        pen_high = np.maximum(0.0, price - ideal_high) * 0.004   # > 85€
+
+        # El marketing ayuda a "tolerar" precios altos (y da un pequeño empuje general)
+        # Usamos el exceso sobre 120K para no favorecer en exceso valores muy pequeños.
+        mk_boost = 0.0005 * (budget - 120)
+
+        # Aplica: resta penalizaciones y suma boost de marketing
+        base = base - pen_low - pen_high + mk_boost
+        base = np.clip(base, 0.05, 0.95).astype(np.float32)
+
     base = np.clip(base, 0.05, 0.95).astype(np.float32)
 
     X = vectorize({
