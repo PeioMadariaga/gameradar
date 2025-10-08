@@ -261,189 +261,315 @@ def curve_price(req: PriceCurveIn):
 @app.get("/demo", response_class=HTMLResponse, tags=["demo"])
 def demo():
     return """
-<!doctype html><html><head><meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GameRadar — Demo</title>
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>GameRadar — Demo WOW</title>
 <style>
-:root{--bg:#0b1220;--card:#121a2a;--accent:#5ce1e6;--txt:#e8eefc}
-body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(120deg,#0b1220,#0e1430);color:var(--txt)}
-.wrap{max-width:1000px;margin:32px auto;padding:0 16px}
+:root{
+  --bg:#0b1220; --card:#111a2a; --muted:#8aa0c8; --txt:#e8eefc; --accent:#5ce1e6; --ok:#22c55e; --bad:#f87171; --line:#233;
+}
+html[data-theme='light']{
+  --bg:#f5f7fb; --card:#ffffff; --muted:#5a6b86; --txt:#0b1220; --accent:#0066ff22; --ok:#16a34a; --bad:#dc2626; --line:#e6ecf5;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(120deg,var(--bg),#0e1430);color:var(--txt)}
+.wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+h1{margin:8px 0 16px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.tab{padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#0e1628;cursor:pointer}
+html[data-theme='light'] .tab{background:#f2f6ff}
+.tab.active{outline:2px solid var(--accent)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.card{background:var(--card);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-h1,h2{margin:0 0 12px}
-label{font-size:14px;opacity:.9}
-input,button{font-size:14px;border-radius:10px;border:1px solid #334;padding:10px 12px;background:#0e1628;color:var(--txt)}
-.row{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
-.pill{padding:6px 10px;border:1px solid #334;border-radius:999px;cursor:pointer}
+.card{background:var(--card);border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.20);border:1px solid var(--line)}
+.section{display:none}
+.section.active{display:block}
+label{font-size:14px;color:var(--muted)}
+.input-row{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+.pill{padding:6px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer;display:inline-block}
 .pill input{vertical-align:middle;margin-right:6px}
-button.primary{background:var(--accent);color:#002;padding:10px 16px;border:none;font-weight:700;cursor:pointer}
-.big{font-size:32px;font-weight:800}
-table{width:100%;border-collapse:collapse}
-th,td{padding:8px;border-bottom:1px solid #233}
+input,button{font-size:14px;border-radius:10px;border:1px solid var(--line);padding:10px 12px;background:#0e1628;color:var(--txt)}
+html[data-theme='light'] input, html[data-theme='light'] button{background:#fff}
+button.primary{background:var(--accent);border:none;font-weight:700;color:#002}
+.kpis{display:flex;gap:16px;flex-wrap:wrap}
+.kpi{flex:1;min-width:220px;display:flex;gap:16px;align-items:center}
+.gauge{--p:0; width:96px;height:96px;border-radius:50%;background:
+ conic-gradient(#29b5ff var(--p), #2a3347 0);
+ display:grid;place-items:center}
+.gauge span{background:var(--card);width:74px;height:74px;border-radius:50%;display:grid;place-items:center;font-weight:800}
+.small{font-size:12px;color:var(--muted)}
+.table{width:100%;border-collapse:collapse;margin-top:8px}
+.table th,.table td{border-bottom:1px solid var(--line);padding:8px;text-align:left}
+.badge{padding:4px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+canvas{width:100%;height:220px;border:1px solid var(--line);border-radius:12px;background:#0e1628}
+.theme{position:fixed;right:16px;top:16px}
 img{max-width:100%}
-.muted{opacity:.8}
-</style></head><body>
+</style>
+</head>
+<body>
+<div class="theme">
+  <label class="row"><input id="theme" type="checkbox"> Tema claro</label>
+</div>
+
 <div class="wrap">
   <h1>🎮 GameRadar — Demo</h1>
-  <p class="muted">Predice el éxito de un videojuego y muestra un gráfico listo para incrustar en cualquier web.</p>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" data-tab="resumen">Resumen</div>
+    <div class="tab" data-tab="paises">Países</div>
+    <div class="tab" data-tab="whatif">What-if</div>
+    <div class="tab" data-tab="precio">Precio óptimo</div>
+  </div>
 
   <div class="grid">
+    <!-- Panel izquierdo: parámetros -->
     <div class="card">
-      <h2>1) Parámetros</h2>
+      <h2>Parámetros</h2>
 
-      <div class="row"><div>
-        <label>Géneros</label><br/>
-        <label class="pill"><input type="checkbox" name="genre" value="RPG">RPG</label>
-        <label class="pill"><input type="checkbox" name="genre" value="Adventure">Adventure</label>
-        <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
-        <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
-        <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
-      </div></div>
-
-      <div class="row"><div>
-        <label>Plataformas</label><br/>
-        <label class="pill"><input type="checkbox" name="plat" value="PC">PC</label>
-        <label class="pill"><input type="checkbox" name="plat" value="PS5">PS5</label>
-        <label class="pill"><input type="checkbox" name="plat" value="Xbox">Xbox</label>
-        <label class="pill"><input type="checkbox" name="plat" value="Switch">Switch</label>
-      </div></div>
-
-      <div class="row">
-        <div><label>Precio (€)</label><br/><input id="price" type="text" value="39,99"></div>
-        <div><label>Marketing (K€)</label><br/><input id="mk" type="text" value="120"></div>
+      <div class="input-row">
+        <div>
+          <label>Géneros</label><br/>
+          <label class="pill"><input type="checkbox" name="genre" value="RPG" checked>RPG</label>
+          <label class="pill"><input type="checkbox" name="genre" value="Adventure" checked>Adventure</label>
+          <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
+          <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
+          <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
+        </div>
       </div>
-      <div class="row">
+
+      <div class="input-row">
+        <div>
+          <label>Plataformas</label><br/>
+          <label class="pill"><input type="checkbox" name="plat" value="PC" checked>PC</label>
+          <label class="pill"><input type="checkbox" name="plat" value="PS5" checked>PS5</label>
+          <label class="pill"><input type="checkbox" name="plat" value="Xbox">Xbox</label>
+          <label class="pill"><input type="checkbox" name="plat" value="Switch" checked>Switch</label>
+        </div>
+      </div>
+
+      <div class="input-row row">
+        <div><label>Precio (€)</label><br/><input id="price" type="number" step="0.01" value="39.99"></div>
+        <div><label>Marketing (K€)</label><br/><input id="mk" type="number" step="1" value="120"></div>
         <label class="pill"><input id="seq" type="checkbox">Secuela</label>
         <label class="pill"><input id="cross" type="checkbox" checked>Crossplay</label>
         <label class="pill"><input id="coop" type="checkbox">Coop</label>
       </div>
-      <div class="row">
+
+      <div class="input-row row">
         <div><label>API Key (opcional)</label><br/><input id="apikey" placeholder="X-API-Key si la definiste"></div>
       </div>
+
       <div class="row">
-        <button class="primary" onclick="pred()">⚡ Predecir</button>
-        <button onclick="wif()">🧪 What-if</button>
+        <button class="primary" id="btnPred">⚡ Predecir</button>
+        <button id="btnWhat">🧪 What-if</button>
       </div>
     </div>
 
+    <!-- Panel derecho: contenido por pestañas -->
     <div class="card">
-      <h2>2) Resultados</h2>
-      <div class="big" id="world">—</div>
-      <p class="muted">Probabilidad de éxito mundial</p>
-      <p id="rev" class="muted" style="margin-top:8px">Ingresos estimados: —</p>
-      <h3 style="margin-top:16px">Top ventas por país</h3>
-      <table id="sales"><thead><tr><th>País</th><th>Unidades</th></tr></thead><tbody></tbody></table>
-      <img id="img" alt="chart" style="display:none;margin-top:8px"/>
-      <h3 style="margin-top:16px">Top países</h3>
-      <table id="table"><thead><tr><th>País</th><th>Prob.</th></tr></thead><tbody></tbody></table>
-    </div>
-  </div>
 
-  <div class="card" style="margin-top:16px">
-    <h2>3) What-if</h2>
-    <table id="what"><thead><tr><th>Cambio</th><th>Nuevo %</th><th>Δ respecto base</th></tr></thead><tbody></tbody></table>
+      <!-- RESUMEN -->
+      <div class="section active" id="tab-resumen">
+        <h2>Resultados</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <div class="gauge" id="gauge" style="--p:0deg"><span id="pct">—</span></div>
+            <div>
+              <div style="font-weight:800;font-size:28px" id="pctTxt">—</div>
+              <div class="small">Probabilidad de éxito mundial</div>
+              <div class="small" id="rev">Ingresos estimados: —</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tools" style="margin:10px 0">
+          <span class="badge" id="badgeGen">—</span>
+          <span class="badge" id="badgePlat">—</span>
+          <button id="btnCopy">Copiar JSON</button>
+          <button id="btnDownload">Descargar gráfico</button>
+        </div>
+
+        <img id="img" alt="chart" style="display:none;margin-top:8px"/>
+      </div>
+
+      <!-- PAISES -->
+      <div class="section" id="tab-paises">
+        <h2>Top países</h2>
+        <table class="table"><thead><tr><th>País</th><th>Prob.</th><th>Unidades</th></tr></thead><tbody id="tbodyCountries"></tbody></table>
+      </div>
+
+      <!-- WHATIF -->
+      <div class="section" id="tab-whatif">
+        <h2>What-if</h2>
+        <div id="whatCards" class="row" style="gap:12px;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- PRECIO -->
+      <div class="section" id="tab-precio">
+        <h2>Curva de precio</h2>
+        <canvas id="cv"></canvas>
+        <div class="small" id="best"></div>
+      </div>
+
+    </div>
   </div>
 </div>
 
 <script>
 const API = location.origin;
-function n(v){ return parseFloat(String(v).replace(",", ".")); }
-function headers(){ const h={"Content-Type":"application/json"}; const k=document.getElementById('apikey').value.trim(); if(k) h["X-API-Key"]=k; return h; }
-function checked(name){ return [...document.querySelectorAll('input[name="'+name+'"]:checked')].map(x=>x.value); }
-
-async function pred(){
-  const body = {
+const $ = s => document.querySelector(s);
+const $all = s => [...document.querySelectorAll(s)];
+function headers(){ const h={"Content-Type":"application/json"}; const k=$("#apikey").value.trim(); if(k) h["X-API-Key"]=k; return h; }
+function checked(name){ return $all('input[name="'+name+'"]:checked').map(x=>x.value); }
+function bodyBase(){
+  return {
     genres: checked("genre"),
     platforms: checked("plat"),
-    price_eur: n(document.getElementById('price').value),
-    marketing_budget_k: n(document.getElementById('mk').value),
-    is_sequel: document.getElementById('seq').checked,
-    has_crossplay: document.getElementById('cross').checked,
-    coop: document.getElementById('coop').checked
+    price_eur: parseFloat($("#price").value),
+    marketing_budget_k: parseFloat($("#mk").value),
+    is_sequel: $("#seq").checked,
+    has_crossplay: $("#cross").checked,
+    coop: $("#coop").checked
   };
-  const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
-  if(!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} alert("Error "+r.status+"\\n"+(typeof p==="string"?p:JSON.stringify(p))); return; }
-  const data = await r.json();
-  document.getElementById('world').textContent = (data.success_worldwide*100).toFixed(1) + "%";
-  const img = document.getElementById('img'); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
-  const tb = document.querySelector('#table tbody'); tb.innerHTML="";
-  Object.entries(data.success_by_country).sort((a,b)=>b[1]-a[1]).slice(0,5).forEach(([c,v])=>{
-    const tr = document.createElement('tr'); tr.innerHTML = `<td>${c}</td><td>${(v*100).toFixed(1)}%</td>`; tb.appendChild(tr);
-  });
-    // KPI de ingresos (usa data.revenue_global_eur)
-  const revEl = document.getElementById('rev');
-  if (revEl) {
-    revEl.textContent =
-      "Ingresos estimados: " +
-      new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR' })
-        .format(data.revenue_global_eur);
-  }
-
-  // Top ventas por país (usa data.units_by_country)
-  const ts = document.querySelector('#sales tbody');
-  if (ts) {
-    ts.innerHTML = "";
-    Object.entries(data.units_by_country)
-      .sort((a,b)=>b[1]-a[1]).slice(0,5)
-      .forEach(([c,u])=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${c}</td><td>${u.toLocaleString('es-ES')}</td>`;
-        ts.appendChild(tr);
-      });
-  }
-
 }
 
-async function wif(){
-  const genres = checked("genre");
-  const plats  = checked("plat");
-  const base_payload = {
-    genres, platforms: plats,
-    price_eur: n(document.getElementById('price').value),
-    marketing_budget_k: n(document.getElementById('mk').value),
-    is_sequel: document.getElementById('seq').checked,
-    has_crossplay: document.getElementById('cross').checked,
-    coop: document.getElementById('coop').checked
-  };
+let lastPredict = null; // guardamos último JSON para tabs
 
+// Tabs
+$all(".tab").forEach(t=>t.onclick=()=>{
+  $all(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  $all(".section").forEach(x=>x.classList.remove("active"));
+  $("#tab-"+t.dataset.tab).classList.add("active");
+});
+
+// Tema
+const themeEl = $("#theme");
+function applyTheme(){ document.documentElement.setAttribute("data-theme", themeEl.checked ? "light":"dark"); }
+themeEl.onchange = applyTheme; applyTheme();
+
+// Animación gauge
+function animateGauge(p){ // p en [0,1]
+  const deg = Math.round(p*360);
+  $("#gauge").style.setProperty("--p", deg+"deg");
+  // contador
+  const target = Math.round(p*1000)/10;
+  let cur = 0;
+  const step = () => { cur += Math.max(0.3,(target-cur)/10); $("#pct").textContent = cur.toFixed(1)+"%"; if(cur<target-0.1) requestAnimationFrame(step); };
+  $("#pctTxt").textContent = target.toFixed(1)+"%";
+  requestAnimationFrame(step);
+}
+
+async function predict(){
+  const body = bodyBase();
+  const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
+  if(!r.ok){ alert("Error "+r.status); return; }
+  const data = await r.json(); lastPredict = data;
+
+  // KPI
+  animateGauge(data.success_worldwide);
+  $("#rev").textContent = "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
+
+  // badges
+  $("#badgeGen").textContent = "Géneros: " + (body.genres.join(", ") || "—");
+  $("#badgePlat").textContent = "Plataformas: " + (body.platforms.join(", ") || "—");
+
+  // imagen
+  const img = $("#img"); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
+
+  // tabla países
+  const tb = $("#tbodyCountries"); tb.innerHTML="";
+  Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country[c]])
+    .sort((a,b)=>b[1]-a[1])
+    .forEach(([c,p,u])=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${c}</td><td>${(p*100).toFixed(1)}%</td><td>${u.toLocaleString('es-ES')}</td>`;
+      tb.appendChild(tr);
+    });
+}
+
+$("#btnPred").onclick = predict;
+
+// Descargar gráfico / Copiar JSON
+$("#btnDownload").onclick = ()=>{
+  if(!lastPredict) return;
+  const a = document.createElement('a');
+  a.href = "data:image/png;base64," + lastPredict.heatmap_base64;
+  a.download = "gameradar_paises.png";
+  a.click();
+};
+$("#btnCopy").onclick = ()=>{
+  if(!lastPredict) return;
+  navigator.clipboard.writeText(JSON.stringify(lastPredict, null, 2));
+};
+
+// WHAT-IF
+$("#btnWhat").onclick = async ()=>{
+  const base_payload = bodyBase();
   const variants = [
     {"price_eur": base_payload.price_eur - 10},
     {"price_eur": base_payload.price_eur + 10},
     {"marketing_budget_k": base_payload.marketing_budget_k + 80},
-    {"platforms": Array.from(new Set([...plats, "PS5", "Xbox"]))},
+    {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
     {"coop": !base_payload.coop}
   ];
-
-  const headers = {"Content-Type":"application/json"};
-  const key = document.getElementById('apikey').value.trim();
-  if(key) headers["X-API-Key"] = key;
-
-  const r = await fetch(API + "/whatif", {
-    method:"POST",
-    headers,
-    body: JSON.stringify({base_payload, variants})
-  });
+  const r = await fetch(API + "/whatif", {method:"POST", headers: headers(), body: JSON.stringify({base_payload, variants})});
+  if(!r.ok){ alert("Error "+r.status); return; }
   const data = await r.json();
 
-  // Actualiza también la probabilidad base (último valor)
-  document.getElementById('world').textContent =
-    (data.base*100).toFixed(1) + "% (base)";
-
-  const tb = document.querySelector('#what tbody');
-  tb.innerHTML = "";
+  const wrap = $("#whatCards"); wrap.innerHTML = "";
   data.variants.forEach(v=>{
-    const delta = (v.delta*100).toFixed(1);
-    const color = v.delta >= 0 ? "lime" : "salmon";
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${v.change}</td>
-                    <td>${(v.success_worldwide*100).toFixed(1)}%</td>
-                    <td style="color:${color}">${delta} pp</td>`;
-    tb.appendChild(tr);
+    const up = v.delta >= 0;
+    const card = document.createElement('div');
+    card.className = "card";
+    card.style.width="220px";
+    card.innerHTML = `
+      <div class="small" style="opacity:.8">${v.change}</div>
+      <div style="font-weight:800;font-size:22px">${(v.success_worldwide*100).toFixed(1)}%</div>
+      <div style="color:${up?'var(--ok)':'var(--bad)'};font-weight:700">${up?'▲':'▼'} ${(v.delta*100).toFixed(1)} pp</div>
+    `;
+    wrap.appendChild(card);
   });
-}
+  // cambia a pestaña what-if
+  document.querySelector('.tab[data-tab="whatif"]').click();
+};
 
+// CURVA DE PRECIO
+async function drawPriceCurve(){
+  const payload = bodyBase();
+  const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
+  if(!r.ok){ return; }
+  const data = await r.json();
+  const cv = $("#cv"); const ctx=cv.getContext("2d"); const W=cv.width= cv.clientWidth*2; const H=cv.height= 240;
+  ctx.clearRect(0,0,W,H);
+  // ejes
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
+  ctx.beginPath(); ctx.moveTo(40,H-30); ctx.lineTo(W-10,H-30); ctx.moveTo(40,H-30); ctx.lineTo(40,10); ctx.stroke();
+  // línea
+  const ps = data.points; const xs=ps.map(p=>p[0]), ys=ps.map(p=>p[1]);
+  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=0, maxy=Math.max(1, ...ys);
+  const sx=x=> 40 + (x-minx)/(maxx-minx) * (W-60);
+  const sy=y=> (H-30) - (y-miny)/(maxy-miny) * (H-50);
+  ctx.beginPath(); ctx.strokeStyle = "#29b5ff"; ctx.lineWidth=3;
+  ps.forEach((p,i)=>{ const x=sx(p[0]), y=sy(p[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.stroke();
+  // mejor punto
+  const bx = sx(data.best_price), by = sy(data.best_prob);
+  ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
+  $("#best").textContent = "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
+}
+document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
+
+// predicción inicial para que entre con algo
+predict();
 </script>
-</body></html>
+</body>
+</html>
     """
 
 # -----------------------------
