@@ -46,8 +46,8 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
         + 0.04*(np.array(["Switch" in pi for pi in p])) \
         + 0.03*cross + 0.02*coop \
         # --- Nuevo tratamiento de precio (óptimo ~60–80€) y marketing con tolerancia ---
-        ideal_low  = 50.0   # por debajo, parece "low-cost"
-        ideal_high = 80.0   # por encima, se percibe caro
+        ideal_low  = 45.0   # por debajo, parece "low-cost"
+        ideal_high = 85.0   # por encima, se percibe caro
 
         # Penalizaciones a dos lados (vectorizadas)
         pen_low  = np.maximum(0.0, ideal_low  - price) * 0.003   # < 40€
