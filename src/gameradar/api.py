@@ -238,15 +238,31 @@ def predict(payload: PredictIn):
 @app.post("/whatif", response_model=WhatIfOut, tags=["whatif"])
 def whatif(req: WhatIfIn):
     _ensure_loaded()
-    Xbase = vectorize_one(req.base_payload.model_dump())
-    base_world = float(MODEL.predict(Xbase, verbose=0)[0,0])
+    base_payload = req.base_payload.model_dump()
+
+    # 1) Construimos todos los payloads (base + variantes)
+    payloads = [base_payload]
+    Xs = [vectorize_one(base_payload)]
+    for change in req.variants:
+        p = base_payload.copy()
+        p.update(change)
+        payloads.append(p)
+        Xs.append(vectorize_one(p))
+
+    # 2) Predicción en LOTE (una sola llamada a Keras)
+    Xmat = np.vstack(Xs)                 # (N+1, D)
+    preds = MODEL.predict(Xmat, verbose=0).reshape(-1)  # array de probabilities
+
+    # 3) Aplicamos PEGI global a cada payload para coherencia con /predict
+    pegi_mults = [PEGI_GLOBAL_MULT.get(p.get("pegi_age", 12), 1.0) for p in payloads]
+    preds = preds * np.array(pegi_mults, dtype=np.float32)
+
+    base_world = float(preds[0])
     items: list[WhatIfOutItem] = []
-    for v in req.variants:
-        p = req.base_payload.model_dump()
-        p.update(v)
-        Xv = vectorize_one(p)
-        w = float(MODEL.predict(Xv, verbose=0)[0,0])
-        items.append(WhatIfOutItem(change=str(v), success_worldwide=w, delta=w-base_world))
+    for i, change in enumerate(req.variants, start=1):
+        w = float(preds[i])
+        items.append(WhatIfOutItem(change=str(change), success_worldwide=w, delta=w - base_world))
+
     return WhatIfOut(base=base_world, variants=items)
 class PriceCurveIn(BaseModel):
     payload: PredictIn
@@ -337,6 +353,9 @@ img{max-width:100%}
 .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #3a4a6a; border-top-color: #5ce1e6; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
 #confetti { position: fixed; inset: 0; pointer-events: none; display:none; }
+
+.grid-genres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+@media (min-width:900px){.grid-genres{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
 <body>
@@ -360,16 +379,26 @@ img{max-width:100%}
     <div class="card">
       <h2>Parámetros</h2>
 
-      <div class="input-row">
-        <div>
-          <label>Géneros</label><br/>
-          <label class="pill"><input type="checkbox" name="genre" value="RPG" checked>RPG</label>
-          <label class="pill"><input type="checkbox" name="genre" value="Adventure" checked>Adventure</label>
-          <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
-          <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
-          <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
-        </div>
+     <div class="input-row">
+         <div>
+            <label>Géneros</label><br/>
+            <div class="grid-genres">
+              <label class="pill"><input type="checkbox" name="genre" value="RPG" checked>RPG</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Adventure" checked>Adventure</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Action">Action</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Shooter">Shooter</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Sports">Sports</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Simulation">Simulation</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Strategy">Strategy</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Horror">Horror</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Racing">Racing</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Family">Family</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Indie">Indie</label>
+              <label class="pill"><input type="checkbox" name="genre" value="Platformer">Platformer</label>
+            </div>
+          </div>
       </div>
+
 
       <div class="input-row">
         <div>
