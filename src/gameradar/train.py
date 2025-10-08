@@ -4,9 +4,9 @@ import numpy as np
 from tensorflow import keras as K
 
 # Vocabularios y países (mantener cortito para demo)
-GENRES = ["Action","RPG","Adventure","Shooter","Sports"]
+GENRES = ["RPG","Adventure","Shooter","Sports","Action","Simulation","Strategy","Horror","Racing","Family","Indie","Platformer"]
 PLATFORMS = ["PC","PS5","Xbox","Switch"]
-COUNTRIES = ["ES","US","JP","BR","FR"]
+COUNTRIES = ["ES", "US", "JP", "BR", "FR", "DE", "GB", "IT"]
 
 def vectorize(batch):
     """ batch: dict con listas numpy. Devuelve X [n, d]. """
@@ -32,14 +32,23 @@ def gen_synth(n=2000, rng=np.random.default_rng(7)):
     cross  = rng.integers(0,2,size=n).astype(np.float32)
     coop   = rng.integers(0,2,size=n).astype(np.float32)
     # score sintético
+    # score sintético
     base = 0.45 \
         + 0.06*(np.array(["RPG" in gi for gi in g])) \
         + 0.05*(np.array(["Shooter" in gi for gi in g])) \
         + 0.04*(np.array(["Sports" in gi for gi in g])) \
+        + 0.03*(np.array(["Action" in gi for gi in g])) \
+        + 0.02*(np.array(["Adventure" in gi for gi in g])) \
+        + 0.03*(np.array(["Strategy" in gi for gi in g])) \
+        + 0.02*(np.array(["Simulation" in gi for gi in g])) \
+        + 0.02*(np.array(["Family" in gi for gi in g])) \
+        + 0.02*(np.array(["Racing" in gi for gi in g])) \
+        + 0.01*(np.array(["Horror" in gi for gi in g])) \
         + 0.04*(np.array(["Switch" in pi for pi in p])) \
         + 0.03*cross + 0.02*coop \
         - 0.0015*(price-39) + 0.0006*(budget-120)
     base = np.clip(base, 0.05, 0.95).astype(np.float32)
+
     X = vectorize({
         "genres": g, "platforms": p,
         "price_eur": price, "marketing_budget_k": budget,
