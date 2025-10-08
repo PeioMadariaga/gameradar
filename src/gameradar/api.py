@@ -561,13 +561,8 @@ function renderCountries(data){
 }
 
 
-function headers(){
-  const h={"Content-Type":"application/json"};
-  const el = $("#apikey");
-  const k = el ? el.value.trim() : "";
-  if(k) h["X-API-Key"]=k;
-  return h;
-}
+function headers(){ return {"Content-Type":"application/json"}; }
+
 function checked(name){ return $all('input[name="'+name+'"]:checked').map(x=>x.value); }
 function bodyBase(){
   return {
@@ -617,6 +612,9 @@ async function predict(){
     const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
     if(!r.ok){ alert("Error "+r.status); return; }
     const data = await r.json(); lastPredict = data;
+    // habilita What-if tras la primera predicción
+    const btnW = document.getElementById('btnWhat');
+    if (btnW) btnW.disabled = false;
     document.getElementById('btnWhat').disabled = false;
     // Badge PEGI (mantén esto si quieres mostrarlo)
     const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
@@ -662,7 +660,14 @@ async function predict(){
 }
 
 
-$("#btnPred").onclick = predict;
+document.getElementById('btnPred').addEventListener('click', async (e)=>{ 
+  e.preventDefault(); 
+  await predict(); 
+});
+document.getElementById('btnWhat').addEventListener('click', async (e)=>{ 
+  e.preventDefault(); 
+  await runWhatIf(); 
+});
 
 // Descargar gráfico / Copiar JSON
 $("#btnDownload").onclick = ()=>{
@@ -678,18 +683,17 @@ $("#btnCopy").onclick = ()=>{
 };
 
 // WHAT-IF
-$("#btnWhat").onclick = async ()=>{
+// WHAT-IF (función robusta)
+async function runWhatIf(){
+  overlay.show();
   try {
-    overlay.show(); // 🔹 aparece el spinner de carga
+    // Si nunca se ha predicho, calculamos una base primero
     if (!lastPredict) {
       await predict();
-      if (!lastPredict) { overlay.hide(); return; }
+      if (!lastPredict) return; // si predict falló, salimos
     }
-    const base_payload = bodyBase();
-    const base_payload = bodyBase();
-    // Si quieres asegurar que el PEGI se envía correctamente:
-    base_payload.pegi_age = parseInt(document.getElementById('pegi').value, 10);
 
+    const base_payload = bodyBase(); // ya incluye pegi_age
     const variants = [
       {"price_eur": base_payload.price_eur - 10},
       {"price_eur": base_payload.price_eur + 10},
@@ -703,14 +707,12 @@ $("#btnWhat").onclick = async ()=>{
       headers: headers(),
       body: JSON.stringify({ base_payload, variants })
     });
-
-    if (!r.ok) {
-      alert("Error " + r.status);
-      return;
+    if (!r.ok){
+      let p; try{p=await r.json()}catch{p=await r.text()}
+      throw new Error("HTTP "+r.status+" – "+(typeof p==="string"?p:JSON.stringify(p)));
     }
 
     const data = await r.json();
-
     const wrap = document.getElementById("whatCards");
     wrap.innerHTML = "";
 
@@ -729,13 +731,17 @@ $("#btnWhat").onclick = async ()=>{
       wrap.appendChild(card);
     });
 
-    // Cambia automáticamente a la pestaña What-if
+    // Cambia a pestaña What-if
     document.querySelector('.tab[data-tab="whatif"]').click();
 
+  } catch(err){
+    console.error(err);
+    alert("No se pudo ejecutar What-if.\n" + err.message);
   } finally {
-    overlay.hide(); // oculta el spinner, pase lo que pase
+    overlay.hide();
   }
 };
+
 
 // CURVA DE PRECIO
 async function drawPriceCurve(){
@@ -765,7 +771,8 @@ document.querySelector('.tab[data-tab="precio"]').addEventListener('click', draw
 
 // predicción inicial para que entre con algo
 // predict();
-function clearUI(){
+function clearUI(){ … }
+clearUI();
   // KPI
   document.getElementById('gauge').style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
   document.getElementById('pct').textContent = '—';
