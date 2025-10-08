@@ -432,8 +432,8 @@ img{max-width:100%}
      <!-- </div> -->
 
       <div class="row">
-        <button class="primary" id="btnPred">⚡ Predecir</button>
-        <button id="btnWhat">🧪 What-if</button>
+        <button type="button" class="primary" id="btnPred">⚡ Predecir</button>
+        <button type="button" id="btnWhat" disabled>🧪 What-if</button>
       </div>
     </div>
 
@@ -615,7 +615,6 @@ async function predict(){
     // habilita What-if tras la primera predicción
     const btnW = document.getElementById('btnWhat');
     if (btnW) btnW.disabled = false;
-    document.getElementById('btnWhat').disabled = false;
     // Badge PEGI (mantén esto si quieres mostrarlo)
     const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
     const b = document.getElementById('badgePegi');
@@ -670,19 +669,19 @@ document.getElementById('btnWhat').addEventListener('click', async (e)=>{
 });
 
 // Descargar gráfico / Copiar JSON
-$("#btnDownload").onclick = ()=>{
+// Descargar gráfico / Copiar JSON
+document.getElementById('btnDownload').onclick = ()=>{
   if(!lastPredict) return;
   const a = document.createElement('a');
   a.href = "data:image/png;base64," + lastPredict.heatmap_base64;
   a.download = "gameradar_paises.png";
   a.click();
 };
-$("#btnCopy").onclick = ()=>{
+document.getElementById('btnCopy').onclick = ()=>{
   if(!lastPredict) return;
   navigator.clipboard.writeText(JSON.stringify(lastPredict, null, 2));
 };
 
-// WHAT-IF
 // WHAT-IF (función robusta)
 async function runWhatIf(){
   overlay.show();
@@ -742,14 +741,16 @@ async function runWhatIf(){
   }
 };
 
-
 // CURVA DE PRECIO
 async function drawPriceCurve(){
   const payload = bodyBase();
   const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
   if(!r.ok){ return; }
   const data = await r.json();
-  const cv = $("#cv"); const ctx=cv.getContext("2d"); const W=cv.width= cv.clientWidth*2; const H=cv.height= 240;
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  const W = cv.width = cv.clientWidth*2;
+  const H = cv.height = 240;
   ctx.clearRect(0,0,W,H);
   // ejes
   ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
@@ -765,14 +766,23 @@ async function drawPriceCurve(){
   // mejor punto
   const bx = sx(data.best_price), by = sy(data.best_prob);
   ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
-  $("#best").textContent = "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
+  document.getElementById("best").textContent =
+    "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
 }
 document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
 
-// predicción inicial para que entre con algo
-// predict();
-function clearUI(){ … }
-clearUI();
+// Vinculación de botones (robusta)
+document.getElementById('btnPred').addEventListener('click', async (e)=>{ 
+  e.preventDefault(); 
+  await predict(); 
+});
+document.getElementById('btnWhat').addEventListener('click', async (e)=>{ 
+  e.preventDefault(); 
+  await runWhatIf(); 
+});
+
+// Estado inicial “limpio”
+function clearUI(){
   // KPI
   document.getElementById('gauge').style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
   document.getElementById('pct').textContent = '—';
