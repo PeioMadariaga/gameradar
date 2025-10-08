@@ -94,7 +94,8 @@ class PredictIn(BaseModel):
     studio_tier: str | None = None
     art_style: str | None = None
     release_quarter: str | None = None
-
+    pegi_age: int = 12  # admite 3,7,12,16,18
+    
     model_config = {
         "json_schema_extra": {
             "examples": [{
@@ -116,6 +117,7 @@ class PredictOut(BaseModel):
     heatmap_base64: str
     units_by_country: Dict[str, int]
     revenue_global_eur: float
+    pegi_age: int
 
 class WhatIfIn(BaseModel):
     base_payload: PredictIn
@@ -166,12 +168,16 @@ def bars_png(d: Dict[str,float]) -> str:
 
 # Afinidades para derivar probabilidades por país desde el score mundial (demo)
 AFF = {
-    "JP": {"RPG":1.2, "Shooter":0.9},
-    "US": {"Shooter":1.2, "Sports":1.1},
-    "ES": {"Sports":1.15, "RPG":1.05},
-    "BR": {"Sports":1.2, "Action":1.05},
-    "FR": {}
+    "JP": {"RPG": 1.20, "Shooter": 0.90, "Adventure": 1.08, "Strategy": 1.05},
+    "US": {"Shooter": 1.20, "Sports": 1.10, "Action": 1.05, "Racing": 1.05},
+    "ES": {"Sports": 1.15, "RPG": 1.05, "Adventure": 1.05},
+    "BR": {"Sports": 1.20, "Action": 1.05, "Family": 1.05},
+    "FR": {"Adventure": 1.05, "Indie": 1.05},
+    "DE": {"Simulation": 1.10, "Strategy": 1.08, "Racing": 1.05},
+    "GB": {"Sports": 1.10, "Action": 1.05},
+    "IT": {"Sports": 1.12, "Racing": 1.08}
 }
+PEGI_GLOBAL_MULT = {3: 1.00, 7: 0.98, 12: 0.95, 16: 0.90, 18: 0.85}
 
 # -----------------------------
 # Rutas
@@ -194,6 +200,15 @@ def predict(payload: PredictIn):
         for g in payload.genres:
             mult *= AFF.get(c, {}).get(g, 1.0)
         by_country[c] = float(np.clip(world * mult, 0.01, 0.99))
+    
+    # aplicar multiplicador PEGI al score global
+    world *= PEGI_GLOBAL_MULT.get(payload.pegi_age, 1.0)
+
+    # aplicar multiplicador PEGI por país
+    for c in list(by_country.keys()):
+        by_country[c] = float(
+            np.clip(by_country[c] * PEGI_GLOBAL_MULT.get(payload.pegi_age, 1.0), 0.01, 0.99)
+        )
 
     # Playtime sencillo (demo)
     play = {}
@@ -203,6 +218,7 @@ def predict(payload: PredictIn):
         - 0.04*(payload.price_eur - 39.0)
     for c in COUNTRIES:
         play[c] = float(np.clip(base_play, 3.0, 60.0))
+    
     # --- NUEVO: unidades y revenue ---
     base_units = 80000  # unidades “base” por país cuando p=1.0 (ajustable para demo)
     units_by_country = {c: int(base_units * p) for c, p in by_country.items()}
@@ -215,7 +231,8 @@ def predict(payload: PredictIn):
         avg_playtime_by_country=play,
         heatmap_base64=heat_b64,
         units_by_country=units_by_country,
-        revenue_global_eur=revenue_global_eur
+        revenue_global_eur=revenue_global_eur,
+        pegi_age=payload.pegi_age
     )
 
 @app.post("/whatif", response_model=WhatIfOut, tags=["whatif"])
@@ -355,14 +372,23 @@ img{max-width:100%}
       <div class="input-row row">
         <div><label>Precio (€)</label><br/><input id="price" type="number" step="0.01" value="39.99"></div>
         <div><label>Marketing (K€)</label><br/><input id="mk" type="number" step="1" value="120"></div>
+        <div><label>PEGI</label><br/>
+            <select id="pegi">
+              <option>3</option>
+              <option>7</option>
+              <option selected>12</option>
+              <option>16</option>
+              <option>18</option>
+            </select>
+        </div>
         <label class="pill"><input id="seq" type="checkbox">Secuela</label>
         <label class="pill"><input id="cross" type="checkbox" checked>Crossplay</label>
         <label class="pill"><input id="coop" type="checkbox">Coop</label>
-      </div>
+    </div>
 
-      <div class="input-row row">
-        <div><label>API Key (opcional)</label><br/><input id="apikey" placeholder="X-API-Key si la definiste"></div>
-      </div>
+     <!-- <div class="input-row row"> -->
+     <!--   <div><label>API Key (opcional)</label><br/><input id="apikey" placeholder="X-API-Key si la definiste"></div> -->
+     <!-- </div> -->
 
       <div class="row">
         <button class="primary" id="btnPred">⚡ Predecir</button>
@@ -383,6 +409,7 @@ img{max-width:100%}
               <div style="font-weight:800;font-size:28px" id="pctTxt">—</div>
               <div class="small">Probabilidad de éxito mundial</div>
               <div class="small" id="rev">Ingresos estimados: —</div>
+              <div class="small" id="badgePegi">PEGI: 12</div>
             </div>
           </div>
         </div>
@@ -434,7 +461,8 @@ function bodyBase(){
     marketing_budget_k: parseFloat($("#mk").value),
     is_sequel: $("#seq").checked,
     has_crossplay: $("#cross").checked,
-    coop: $("#coop").checked
+    coop: $("#coop").checked,
+    pegi_age: parseInt(document.getElementById('pegi').value, 10)
   };
 }
 
@@ -470,7 +498,15 @@ async function predict(){
   const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
   if(!r.ok){ alert("Error "+r.status); return; }
   const data = await r.json(); lastPredict = data;
-
+  const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
+  const b = document.getElementById('badgePegi');
+   if (b) {
+     b.textContent = "PEGI: " + pegi;
+     b.style.padding = "4px 8px";
+     b.style.borderRadius = "999px";
+     b.style.border = "1px solid var(--line)";
+     b.style.background = (pegi >= 18 ? "#4a0f0f" : pegi >= 16 ? "#4a2f0f" : "transparent");
+   }
   // KPI
   animateGauge(data.success_worldwide);
   $("#rev").textContent = "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
@@ -511,6 +547,7 @@ $("#btnCopy").onclick = ()=>{
 // WHAT-IF
 $("#btnWhat").onclick = async ()=>{
   const base_payload = bodyBase();
+  base_payload.pegi_age = parseInt(document.getElementById('pegi').value, 10);
   const variants = [
     {"price_eur": base_payload.price_eur - 10},
     {"price_eur": base_payload.price_eur + 10},
