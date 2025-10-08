@@ -493,59 +493,69 @@ img{max-width:100%}
 const API = location.origin;
 const $ = s => document.querySelector(s);
 const $all = s => [...document.querySelectorAll(s)];
-// Banderas y nombre "bonito" de país
+
+// Banderas y nombres
 const FLAGS = { ES:"🇪🇸", US:"🇺🇸", JP:"🇯🇵", BR:"🇧🇷", FR:"🇫🇷", DE:"🇩🇪", GB:"🇬🇧", IT:"🇮🇹" };
 const NAMES = { ES:"España", US:"Estados Unidos", JP:"Japón", BR:"Brasil", FR:"Francia", DE:"Alemania", GB:"Reino Unido", IT:"Italia" };
 
-// Color del gauge según porcentaje
-function gaugeColor(p){ // p in [0..1]
-  // rojo (0) -> amarillo (0.5) -> verde (1)
-  const r = Math.round(255 * (1-p));
-  const g = Math.round(255 * p);
-  return `rgb(${r},${g},80)`;
-}
-// Formatos
-const fmtPct = x => (x*100).toFixed(1) + "%";
-const fmtMoney = x => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(x);
+// Utilidades
+function gaugeColor(p){ const r=Math.round(255*(1-p)), g=Math.round(255*p); return `rgb(${r},${g},80)`; }
+const fmtPct = x => (x*100).toFixed(1)+"%";
 const fmtInt = x => Number(x).toLocaleString('es-ES');
-
-function launchConfetti(ms=1500){
-  const cv = document.getElementById('confetti'); const ctx = cv.getContext('2d');
-  const DPR = window.devicePixelRatio || 1; cv.style.display='block';
-  const W = cv.width = innerWidth * DPR, H = cv.height = innerHeight * DPR;
-  const parts = Array.from({length: 180}, ()=>({
-    x: Math.random()*W, y: -20*DPR, vy: (2+Math.random()*3)*DPR,
-    vx: (Math.random()*2-1)*DPR, s: (4+Math.random()*6)*DPR,
-    c: `hsl(${Math.random()*360},90%,60%)`, r: Math.random()*Math.PI
-  }));
-  let alive=true; const tEnd=performance.now()+ms;
-  (function anim(){
-    ctx.clearRect(0,0,W,H);
-    parts.forEach(p=>{
-      p.x+=p.vx; p.y+=p.vy; p.vy+=0.04*DPR; p.r+=0.1;
-      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r);
-      ctx.fillStyle=p.c; ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s); ctx.restore();
-    });
-    parts.forEach((p,i)=>{ if(p.y>H+50*DPR) parts.splice(i,1); });
-    if(alive && performance.now()<tEnd) requestAnimationFrame(anim);
-    else { cv.style.display='none'; }
-  })();
+function headers(){ return {"Content-Type":"application/json"}; }
+function checked(name){ return $all(`input[name="${name}"]:checked`).map(x=>x.value); }
+function bodyBase(){
+  return {
+    genres: checked("genre"),
+    platforms: checked("plat"),
+    price_eur: parseFloat($("#price").value),
+    marketing_budget_k: parseFloat($("#mk").value),
+    is_sequel: $("#seq").checked,
+    has_crossplay: $("#cross").checked,
+    coop: $("#coop").checked,
+    pegi_age: parseInt($("#pegi").value,10)
+  };
 }
-const overlay = {
-  show(){ document.getElementById('overlay').style.display='grid'; },
-  hide(){ document.getElementById('overlay').style.display='none'; }
-};
+
+// Overlay
+const overlay = { show(){ $("#overlay").style.display='grid'; }, hide(){ $("#overlay").style.display='none'; } };
+
+// Tema
+const themeEl = $("#theme");
+function applyTheme(){ document.documentElement.setAttribute("data-theme", themeEl.checked ? "light":"dark"); }
+themeEl.onchange = applyTheme; applyTheme();
+
+// Tabs
+$all(".tab").forEach(t=>t.onclick=()=>{
+  $all(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  $all(".section").forEach(x=>x.classList.remove("active"));
+  $("#tab-"+t.dataset.tab).classList.add("active");
+});
+
+// Animación gauge
+function animateGauge(p){
+  const deg = Math.round(p*360);
+  $("#gauge").style.setProperty("--p", deg+"deg");
+  const target = Math.round(p*1000)/10;
+  let cur = 0;
+  const step = ()=>{
+    cur += Math.max(0.3,(target-cur)/10);
+    $("#pct").textContent = cur.toFixed(1)+"%";
+    if(cur<target-0.1) requestAnimationFrame(step);
+  };
+  $("#pctTxt").textContent = target.toFixed(1)+"%";
+  requestAnimationFrame(step);
+}
 
 function renderCountries(data){
-  const body = document.getElementById('tbodyCountries'); if(!body) return;
+  const body = $("#tbodyCountries"); if(!body) return;
   body.innerHTML = "";
-  // construimos array [pais, prob, units]
-  const rows = Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country ? data.units_by_country[c] : null]);
+  const rows = Object.entries(data.success_by_country).map(([c,p])=>[c,p, data.units_by_country?data.units_by_country[c]:null]);
   rows.sort((a,b)=>b[1]-a[1]);
   rows.forEach(([c,p,u])=>{
     const tr = document.createElement('tr');
-    const flag = FLAGS[c] || "🏳️";
-    const name = NAMES[c] || c;
+    const flag = FLAGS[c] || "🏳️", name = NAMES[c] || c;
     tr.innerHTML = `
       <td><span class="flag">${flag}</span>${name}</td>
       <td>
@@ -560,64 +570,23 @@ function renderCountries(data){
   });
 }
 
+let lastPredict = null;
 
-function headers(){ return {"Content-Type":"application/json"}; }
-
-function checked(name){ return $all('input[name="'+name+'"]:checked').map(x=>x.value); }
-function bodyBase(){
-  return {
-    genres: checked("genre"),
-    platforms: checked("plat"),
-    price_eur: parseFloat($("#price").value),
-    marketing_budget_k: parseFloat($("#mk").value),
-    is_sequel: $("#seq").checked,
-    has_crossplay: $("#cross").checked,
-    coop: $("#coop").checked,
-    pegi_age: parseInt(document.getElementById('pegi').value, 10)
-  };
-}
-
-let lastPredict = null; // guardamos último JSON para tabs
-
-// Tabs
-$all(".tab").forEach(t=>t.onclick=()=>{
-  $all(".tab").forEach(x=>x.classList.remove("active"));
-  t.classList.add("active");
-  $all(".section").forEach(x=>x.classList.remove("active"));
-  $("#tab-"+t.dataset.tab).classList.add("active");
-});
-
-// Tema
-const themeEl = $("#theme");
-function applyTheme(){ document.documentElement.setAttribute("data-theme", themeEl.checked ? "light":"dark"); }
-themeEl.onchange = applyTheme; applyTheme();
-
-// Animación gauge
-function animateGauge(p){ // p en [0,1]
-  const deg = Math.round(p*360);
-  $("#gauge").style.setProperty("--p", deg+"deg");
-  // contador
-  const target = Math.round(p*1000)/10;
-  let cur = 0;
-  const step = () => { cur += Math.max(0.3,(target-cur)/10); $("#pct").textContent = cur.toFixed(1)+"%"; if(cur<target-0.1) requestAnimationFrame(step); };
-  $("#pctTxt").textContent = target.toFixed(1)+"%";
-  requestAnimationFrame(step);
-}
-
+// PREDICT
 async function predict(){
   try{
     overlay.show();
-
     const body = bodyBase();
     const r = await fetch(API + "/predict", {method:"POST", headers: headers(), body: JSON.stringify(body)});
     if(!r.ok){ alert("Error "+r.status); return; }
     const data = await r.json(); lastPredict = data;
-    // habilita What-if tras la primera predicción
-    const btnW = document.getElementById('btnWhat');
-    if (btnW) btnW.disabled = false;
-    // Badge PEGI (mantén esto si quieres mostrarlo)
-    const pegi = (data.pegi_age ?? parseInt(document.getElementById('pegi').value, 10));
-    const b = document.getElementById('badgePegi');
+
+    // habilita What-if
+    const btnW = $("#btnWhat"); if(btnW) btnW.disabled = false;
+
+    // Badge PEGI
+    const pegi = (data.pegi_age ?? parseInt($("#pegi").value,10));
+    const b = $("#badgePegi");
     if (b) {
       b.textContent = "PEGI: " + pegi;
       b.style.padding = "4px 8px";
@@ -626,50 +595,96 @@ async function predict(){
       b.style.background = (pegi >= 18 ? "#4a0f0f" : pegi >= 16 ? "#4a2f0f" : "transparent");
     }
 
-    // KPI: gauge con color + contador
+    // KPI
     const p = data.success_worldwide;
-    document.getElementById('gauge').style.background =
-      `conic-gradient(${gaugeColor(p)} ${Math.round(p*360)}deg, #2a3347 0)`;
+    $("#gauge").style.background = `conic-gradient(${gaugeColor(p)} ${Math.round(p*360)}deg, #2a3347 0)`;
     animateGauge(p);
+    $("#rev").textContent = "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
 
-    // Ingresos
-    document.getElementById('rev').textContent =
-      "Ingresos estimados: " + new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(data.revenue_global_eur);
+    // Badges selección
+    $("#badgeGen").textContent  = "Géneros: " + (body.genres.join(", ") || "—");
+    $("#badgePlat").textContent = "Plataformas: " + (body.platforms.join(", ") || "—");
 
-    // Badges de selección
-    document.getElementById('badgeGen').textContent =
-      "Géneros: " + (body.genres.join(", ") || "—");
-    document.getElementById('badgePlat').textContent =
-      "Plataformas: " + (body.platforms.join(", ") || "—");
+    // Gráfico
+    const img = $("#img"); img.src = "data:image/png;base64," + data.heatmap_base64; img.style.display="block";
 
-    // Imagen (barras por país generadas en el backend)
-    const img = document.getElementById('img');
-    img.src = "data:image/png;base64," + data.heatmap_base64;
-    img.style.display="block";
-
-    // Tabla de países con banderas + barras + % + unidades
+    // Tabla países
     renderCountries(data);
 
-    // Confetti si muy alto
     if (p >= 0.85) launchConfetti();
-
   } finally {
     overlay.hide();
   }
 }
 
+// WHAT-IF
+async function runWhatIf(){
+  overlay.show();
+  try {
+    if (!lastPredict) { await predict(); if(!lastPredict) return; }
 
-document.getElementById('btnPred').addEventListener('click', async (e)=>{ 
-  e.preventDefault(); 
-  await predict(); 
-});
-document.getElementById('btnWhat').addEventListener('click', async (e)=>{ 
-  e.preventDefault(); 
-  await runWhatIf(); 
-});
+    const base_payload = bodyBase();
+    const variants = [
+      {"price_eur": base_payload.price_eur - 10},
+      {"price_eur": base_payload.price_eur + 10},
+      {"marketing_budget_k": base_payload.marketing_budget_k + 80},
+      {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
+      {"coop": !base_payload.coop}
+    ];
 
-// Descargar gráfico / Copiar JSON
-// Descargar gráfico / Copiar JSON
+    const r = await fetch(API + "/whatif", { method:"POST", headers: headers(), body: JSON.stringify({ base_payload, variants }) });
+    if (!r.ok){ let p; try{p=await r.json()}catch{p=await r.text()} throw new Error("HTTP "+r.status+" – "+(typeof p==="string"?p:JSON.stringify(p))); }
+
+    const data = await r.json();
+    const wrap = $("#whatCards"); wrap.innerHTML = "";
+    data.variants.forEach(v=>{
+      const up = v.delta >= 0;
+      const card = document.createElement("div");
+      card.className = "card"; card.style.width = "220px";
+      card.innerHTML = `
+        <div class="small" style="opacity:.8">${v.change}</div>
+        <div style="font-weight:800;font-size:22px">${(v.success_worldwide * 100).toFixed(1)}%</div>
+        <div style="color:${up ? 'var(--ok)' : 'var(--bad)'};font-weight:700">
+          ${up ? '▲' : '▼'} ${(v.delta * 100).toFixed(1)} pp
+        </div>`;
+      wrap.appendChild(card);
+    });
+    document.querySelector('.tab[data-tab="whatif"]').click();
+  } catch(err){
+    console.error(err);
+    alert("No se pudo ejecutar What-if.\n" + err.message);
+  } finally {
+    overlay.hide();
+  }
+}
+
+// Curva de precio
+async function drawPriceCurve(){
+  const payload = bodyBase();
+  const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
+  if(!r.ok){ return; }
+  const data = await r.json();
+  const cv = $("#cv"), ctx = cv.getContext("2d");
+  const W = cv.width = cv.clientWidth*2, H = cv.height = 240;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
+  ctx.beginPath(); ctx.moveTo(40,H-30); ctx.lineTo(W-10,H-30); ctx.moveTo(40,H-30); ctx.lineTo(40,10); ctx.stroke();
+  const ps = data.points, xs=ps.map(p=>p[0]), ys=ps.map(p=>p[1]);
+  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=0, maxy=Math.max(1, ...ys);
+  const sx=x=> 40 + (x-minx)/(maxx-minx) * (W-60);
+  const sy=y=> (H-30) - (y-miny)/(maxy-miny) * (H-50);
+  ctx.beginPath(); ctx.strokeStyle = "#29b5ff"; ctx.lineWidth=3;
+  ps.forEach((p,i)=>{ const x=sx(p[0]), y=sy(p[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.stroke();
+  const bx = sx(data.best_price), by = sy(data.best_prob);
+  ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
+  $("#best").textContent = "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
+}
+document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
+
+// Acciones botonería
+document.getElementById('btnPred').addEventListener('click', e=>{ e.preventDefault(); predict(); });
+document.getElementById('btnWhat').addEventListener('click', e=>{ e.preventDefault(); runWhatIf(); });
 document.getElementById('btnDownload').onclick = ()=>{
   if(!lastPredict) return;
   const a = document.createElement('a');
@@ -682,132 +697,19 @@ document.getElementById('btnCopy').onclick = ()=>{
   navigator.clipboard.writeText(JSON.stringify(lastPredict, null, 2));
 };
 
-// WHAT-IF (función robusta)
-async function runWhatIf(){
-  overlay.show();
-  try {
-    // Si nunca se ha predicho, calculamos una base primero
-    if (!lastPredict) {
-      await predict();
-      if (!lastPredict) return; // si predict falló, salimos
-    }
-
-    const base_payload = bodyBase(); // ya incluye pegi_age
-    const variants = [
-      {"price_eur": base_payload.price_eur - 10},
-      {"price_eur": base_payload.price_eur + 10},
-      {"marketing_budget_k": base_payload.marketing_budget_k + 80},
-      {"platforms": Array.from(new Set([...base_payload.platforms, "PS5","Xbox"]))},
-      {"coop": !base_payload.coop}
-    ];
-
-    const r = await fetch(API + "/whatif", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ base_payload, variants })
-    });
-    if (!r.ok){
-      let p; try{p=await r.json()}catch{p=await r.text()}
-      throw new Error("HTTP "+r.status+" – "+(typeof p==="string"?p:JSON.stringify(p)));
-    }
-
-    const data = await r.json();
-    const wrap = document.getElementById("whatCards");
-    wrap.innerHTML = "";
-
-    data.variants.forEach(v => {
-      const up = v.delta >= 0;
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.width = "220px";
-      card.innerHTML = `
-        <div class="small" style="opacity:.8">${v.change}</div>
-        <div style="font-weight:800;font-size:22px">${(v.success_worldwide * 100).toFixed(1)}%</div>
-        <div style="color:${up ? 'var(--ok)' : 'var(--bad)'};font-weight:700">
-          ${up ? '▲' : '▼'} ${(v.delta * 100).toFixed(1)} pp
-        </div>
-      `;
-      wrap.appendChild(card);
-    });
-
-    // Cambia a pestaña What-if
-    document.querySelector('.tab[data-tab="whatif"]').click();
-
-  } catch(err){
-    console.error(err);
-    alert("No se pudo ejecutar What-if.\n" + err.message);
-  } finally {
-    overlay.hide();
-  }
-};
-
-// CURVA DE PRECIO
-async function drawPriceCurve(){
-  const payload = bodyBase();
-  const r = await fetch(API + "/curve/price", {method:"POST", headers: headers(), body: JSON.stringify({payload, min_price:19, max_price:69, steps:21})});
-  if(!r.ok){ return; }
-  const data = await r.json();
-  const cv = document.getElementById("cv");
-  const ctx = cv.getContext("2d");
-  const W = cv.width = cv.clientWidth*2;
-  const H = cv.height = 240;
-  ctx.clearRect(0,0,W,H);
-  // ejes
-  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--line');
-  ctx.beginPath(); ctx.moveTo(40,H-30); ctx.lineTo(W-10,H-30); ctx.moveTo(40,H-30); ctx.lineTo(40,10); ctx.stroke();
-  // línea
-  const ps = data.points; const xs=ps.map(p=>p[0]), ys=ps.map(p=>p[1]);
-  const minx=Math.min(...xs), maxx=Math.max(...xs), miny=0, maxy=Math.max(1, ...ys);
-  const sx=x=> 40 + (x-minx)/(maxx-minx) * (W-60);
-  const sy=y=> (H-30) - (y-miny)/(maxy-miny) * (H-50);
-  ctx.beginPath(); ctx.strokeStyle = "#29b5ff"; ctx.lineWidth=3;
-  ps.forEach((p,i)=>{ const x=sx(p[0]), y=sy(p[1]); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-  ctx.stroke();
-  // mejor punto
-  const bx = sx(data.best_price), by = sy(data.best_prob);
-  ctx.fillStyle="#22c55e"; ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fill();
-  document.getElementById("best").textContent =
-    "Mejor precio ≈ " + data.best_price.toFixed(2) + " €  → " + (data.best_prob*100).toFixed(1) + "%";
-}
-document.querySelector('.tab[data-tab="precio"]').addEventListener('click', drawPriceCurve);
-
-// Vinculación de botones (robusta)
-document.getElementById('btnPred').addEventListener('click', async (e)=>{ 
-  e.preventDefault(); 
-  await predict(); 
-});
-document.getElementById('btnWhat').addEventListener('click', async (e)=>{ 
-  e.preventDefault(); 
-  await runWhatIf(); 
-});
-
 // Estado inicial “limpio”
 function clearUI(){
-  // KPI
-  document.getElementById('gauge').style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
-  document.getElementById('pct').textContent = '—';
-  document.getElementById('pctTxt').textContent = '—';
-  document.getElementById('rev').textContent = 'Ingresos estimados: —';
-  const b = document.getElementById('badgePegi');
-  if (b) { b.textContent = "PEGI: —"; b.style.background = "transparent"; }
-
-  // Gráfico
-  const img = document.getElementById('img');
-  img.style.display = 'none';
-  img.src = '';
-
-  // Tabla países
-  const body = document.getElementById('tbodyCountries');
-  if (body) body.innerHTML = '';
-
-  // What-if
-  document.getElementById("whatCards").innerHTML = '';
-  document.getElementById("btnWhat").disabled = true;
-
-  // Limpia último resultado
+  $("#gauge").style.background = 'conic-gradient(#2a3347 0deg, #2a3347 0)';
+  $("#pct").textContent = '—';
+  $("#pctTxt").textContent = '—';
+  $("#rev").textContent = 'Ingresos estimados: —';
+  const b = $("#badgePegi"); if (b) { b.textContent = "PEGI: 12"; b.style.background = "transparent"; }
+  const img = $("#img"); img.style.display = 'none'; img.src = '';
+  const body = $("#tbodyCountries"); if (body) body.innerHTML = '';
+  $("#whatCards").innerHTML = '';
+  const btnW = $("#btnWhat"); if (btnW) btnW.disabled = true;
   lastPredict = null;
 }
-// Llama al cargar
 clearUI();
 </script>
 </body>
